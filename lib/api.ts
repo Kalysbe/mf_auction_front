@@ -1,5 +1,5 @@
 // API configuration and utilities
-export const API_BASE_URL = "https://mfauction.adb-solution.com"
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"
 
 // Types for API responses
 export interface User {
@@ -252,9 +252,49 @@ export const authAPI = {
 
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
+      console.log("[v0] === ДЕТАЛЬНАЯ ОТЛАДКА URL ===")
+      console.log(
+        "[v0] process.env:",
+        Object.keys(process.env).filter((key) => key.includes("API")),
+      )
+      console.log("[v0] NEXT_PUBLIC_API_BASE_URL из process.env:", process.env.NEXT_PUBLIC_API_BASE_URL)
+      console.log("[v0] typeof NEXT_PUBLIC_API_BASE_URL:", typeof process.env.NEXT_PUBLIC_API_BASE_URL)
+      console.log("[v0] API_BASE_URL константа:", API_BASE_URL)
+      console.log("[v0] window.location.protocol:", typeof window !== "undefined" ? window.location.protocol : "N/A")
+
+      const fullUrl = `${API_BASE_URL}/api/auth/login`
+      console.log("[v0] Полный URL для запроса:", fullUrl)
+
+      if (typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http:")) {
+        console.warn("[v0] ВНИМАНИЕ: Mixed Content - HTTPS страница пытается обратиться к HTTP API")
+        console.warn("[v0] Это может быть заблокировано браузером из соображений безопасности")
+      }
+
+      console.log("[v0] Проверяю доступность сервера...")
+
+      // Проверяем доступность базового URL
+      try {
+        const healthCheck = await fetch(API_BASE_URL, {
+          method: "HEAD",
+          mode: "no-cors",
+        })
+        console.log("[v0] Health check статус:", healthCheck.status)
+      } catch (healthError) {
+        console.log("[v0] Health check ошибка:", healthError.message)
+        if (healthError.message.includes("Mixed Content") || healthError.message.includes("blocked")) {
+          console.error("[v0] ОШИБКА Mixed Content: Браузер блокирует HTTP запросы с HTTPS страницы")
+          throw new APIError(
+            0,
+            "Браузер блокирует подключение к HTTP серверу с HTTPS страницы. Обратитесь к администратору для настройки HTTPS на сервере.",
+          )
+        }
+      }
+
+      console.log("[v0] === КОНЕЦ ОТЛАДКИ ===")
+
       console.log("Logging in user:", email)
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(fullUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -275,9 +315,34 @@ export const authAPI = {
       return data
     } catch (error) {
       console.error("Login fetch error:", error)
+      console.error("[v0] Детали ошибки:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      })
+
       if (error instanceof APIError) {
         throw error
       }
+
+      if (error.message.includes("Failed to fetch")) {
+        const isHttpsToHttp =
+          typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http:")
+
+        if (isHttpsToHttp) {
+          throw new APIError(
+            0,
+            `Mixed Content Error: Браузер блокирует HTTP запросы (${API_BASE_URL}) с HTTPS страницы. Необходимо настроить HTTPS на сервере или использовать HTTP версию сайта.`,
+          )
+        }
+
+        throw new APIError(
+          0,
+          `Не удается подключиться к серверу ${API_BASE_URL}. Проверьте подключение к интернету или доступность сервера.`,
+        )
+      }
+
       throw new APIError(0, `Network error: ${error.message}`)
     }
   },

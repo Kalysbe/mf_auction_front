@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Upload, FileText, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { tokenManager } from "@/lib/api"
 
-const API_BASE_URL = "https://mfauction.adb-solution.com"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"
 
 interface DocumentType {
   id: string

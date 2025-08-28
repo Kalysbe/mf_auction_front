@@ -6,7 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useWebSocket } from "@/hooks/useWebSocket"
-import { normalizeAuctionStatus, getStatusDisplayText, getStatusBadgeVariant, tokenManager } from "@/lib/api"
+import {
+  normalizeAuctionStatus,
+  getStatusDisplayText,
+  getStatusBadgeVariant,
+  tokenManager,
+  API_BASE_URL,
+} from "@/lib/api"
 import { Wifi, WifiOff, FileText } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -32,7 +38,13 @@ function formatAmount(amount: number, currency = "KGS") {
   )
 }
 
-export const API_BASE_URL = "https://mfauction.adb-solution.com"
+console.log("[v0] ПРИНУДИТЕЛЬНАЯ ОТЛАДКА - Переменные окружения:")
+console.log("[v0] process.env.NEXT_PUBLIC_API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL)
+console.log("[v0] API_BASE_URL из lib/api:", API_BASE_URL)
+console.log(
+  "[v0] Все переменные окружения NEXT_PUBLIC:",
+  Object.keys(process.env).filter((key) => key.startsWith("NEXT_PUBLIC")),
+)
 
 export default function Home() {
   const { user } = useAuth()
@@ -47,6 +59,9 @@ export default function Home() {
   const [documentsComplete, setDocumentsComplete] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
+    console.log("[v0] Компонент Home загружен, API_BASE_URL:", API_BASE_URL)
+    console.log("[v0] Переменная окружения NEXT_PUBLIC_API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL)
+
     const handleAuthChange = () => {
       window.location.reload()
     }
@@ -60,6 +75,8 @@ export default function Home() {
 
     setLoadingReport(auctionId)
     console.log("[v0] Получение ведомости для аукциона:", auctionId)
+    console.log("[v0] ОТЛАДКА URL - API_BASE_URL:", API_BASE_URL)
+    console.log("[v0] ОТЛАДКА URL - Полный URL запроса:", `${API_BASE_URL}/api/auction/${auctionId}`)
 
     try {
       const token = tokenManager.getToken()
@@ -69,7 +86,10 @@ export default function Home() {
         return
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/auction/${auctionId}`, {
+      const fullUrl = `${API_BASE_URL}/api/auction/${auctionId}`
+      console.log("[v0] ФИНАЛЬНЫЙ URL ЗАПРОСА:", fullUrl)
+
+      const response = await fetch(fullUrl, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -135,6 +155,9 @@ export default function Home() {
       if (!token) return false
 
       console.log("[v0] Проверяем документы пользователя для аукциона:", auctionId)
+      console.log("[v0] ОТЛАДКА URL - API_BASE_URL для документов:", API_BASE_URL)
+      console.log("[v0] ОТЛАДКА URL - URL типов документов:", `${API_BASE_URL}/api/file/type/list`)
+      console.log("[v0] ОТЛАДКА URL - URL списка документов:", `${API_BASE_URL}/api/file/my-list/`)
 
       const typesResponse = await fetch(`${API_BASE_URL}/api/file/type/list`, {
         headers: {

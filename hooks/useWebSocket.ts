@@ -39,7 +39,7 @@ export interface CreateLotData {
   lotTermMonth: number // добавлено поле lotTermMonth в интерфейс
 }
 
-const SOCKET_URL = "https://mfauction.adb-solution.com"
+const SOCKET_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"
 
 export function useWebSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)

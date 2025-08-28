@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
+import { MixedContentWarning } from "@/components/mixed-content-warning"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showMixedContentWarning, setShowMixedContentWarning] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,6 +46,12 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error("Login error:", error)
+
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes("Mixed Content Error") || errorMessage.includes("Failed to fetch")) {
+        setShowMixedContentWarning(true)
+      }
+
       toast({
         title: "Ошибка",
         description: "Произошла ошибка при входе в систему",
@@ -60,6 +68,8 @@ export default function LoginPage() {
         <Image src="/images/logo_KSE.png" alt="KSE Logo" width={80} height={80} className="mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-primary">Система аукционов КФБ</h1>
       </div>
+
+      {showMixedContentWarning && <MixedContentWarning onDismiss={() => setShowMixedContentWarning(false)} />}
 
       <Card className="border-primary/20">
         <CardHeader className="space-y-1">
@@ -105,7 +115,6 @@ export default function LoginPage() {
         </form>
       </Card>
 
-      {/* Debug информация */}
       {process.env.NODE_ENV === "development" && (
         <Card className="mt-4 border-gray-200 bg-gray-50">
           <CardHeader>
@@ -113,7 +122,9 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <div className="text-xs text-gray-500 space-y-1">
-              <p>API URL: https://mfauction.adb-solution.com/api/auth/login</p>
+              <p>
+                API URL: {process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"}/api/auth/login
+              </p>
               <p>Проверьте консоль браузера для подробных логов</p>
             </div>
           </CardContent>
