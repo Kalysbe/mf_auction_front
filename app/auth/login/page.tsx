@@ -66,7 +66,7 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto">
       <div className="text-center mb-6">
         <Image src="/images/logo_KSE.png" alt="KSE Logo" width={80} height={80} className="mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-primary">Система аукционов КФБ</h1>
+        {/* Название "Система аукционов КФБ" убрано */}
       </div>
 
       {showMixedContentWarning && <MixedContentWarning onDismiss={() => setShowMixedContentWarning(false)} />}
