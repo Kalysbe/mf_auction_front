@@ -39,8 +39,6 @@ export interface CreateLotData {
   lotTermMonth: number // добавлено поле lotTermMonth в интерфейс
 }
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"
-
 export function useWebSocket() {
   const [socket, setSocket] = useState<Socket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -397,18 +395,95 @@ export function useWebSocket() {
       socketRef.current.disconnect()
     }
 
+    const SOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "https://mfa.kse.kg:8443"
+
+    console.log("[v0] ===== WebSocket Connection Debug =====")
+    console.log("[v0] Environment variable NEXT_PUBLIC_WEBSOCKET_URL:", process.env.NEXT_PUBLIC_WEBSOCKET_URL)
+    console.log("[v0] Environment variable NEXT_PUBLIC_API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL)
+    console.log("[v0] Fallback WebSocket URL:", "https://mfa.kse.kg:8443")
+    console.log("[v0] Final SOCKET_URL:", SOCKET_URL)
+    console.log("[v0] WebSocket will connect to:", SOCKET_URL)
+    console.log(
+      "[v0] Connection protocol:",
+      SOCKET_URL.startsWith("https") ? "WSS (Secure WebSocket)" : "WS (WebSocket)",
+    )
+    console.log("[v0] ========================================")
+
     console.log("Connecting to Socket.IO server:", SOCKET_URL)
 
-    // Connection with token in handshake.auth
     const newSocket = io(SOCKET_URL, {
       auth: {
         token: token,
       },
-      transports: ["websocket", "polling"],
-      timeout: 10000,
+      // Try polling first, then websocket as fallback
+      transports: ["polling", "websocket"],
+      timeout: 20000, // Increased timeout
       reconnection: true,
-      reconnectionAttempts: 3,
-      reconnectionDelay: 2000,
+      reconnectionAttempts: 5, // More attempts
+      reconnectionDelay: 3000, // Longer delay between attempts
+      reconnectionDelayMax: 10000,
+      // Force new connection
+      forceNew: true,
+      // Additional options for better compatibility
+      upgrade: true,
+      rememberUpgrade: false,
+    })
+
+    newSocket.on("connect", () => {
+      console.log("[v0] ✅ WebSocket successfully connected!")
+      console.log("[v0] Socket ID:", newSocket.id)
+      console.log("[v0] Connected to URL:", SOCKET_URL)
+      console.log("[v0] Transport used:", newSocket.io.engine.transport.name)
+      console.log("[v0] Connection successful after transport:", newSocket.io.engine.transport.name)
+    })
+
+    newSocket.on("connect_error", (error) => {
+      console.error("[v0] ❌ WebSocket connection error:")
+      console.error("[v0] Error message:", error.message)
+      console.error("[v0] Error type:", error.type)
+      console.error("[v0] Error description:", error.description)
+      console.error("[v0] Error context:", error.context)
+      console.error("[v0] Attempted URL:", SOCKET_URL)
+      console.error("[v0] Available transports:", newSocket.io.opts.transports)
+      console.error("[v0] Current transport attempt:", newSocket.io.engine?.transport?.name || "none")
+      console.error("[v0] Full error object:", error)
+
+      // Check for specific error types
+      if (error.message.includes("websocket error")) {
+        console.error("[v0] 🔍 WebSocket transport failed - this could be due to:")
+        console.error("[v0] - Server not supporting WebSocket protocol")
+        console.error("[v0] - SSL certificate issues")
+        console.error("[v0] - Firewall blocking WebSocket connections")
+        console.error("[v0] - CORS policy restrictions")
+        console.error("[v0] 💡 Trying polling transport as fallback...")
+      }
+
+      if (error.message.includes("timeout")) {
+        console.error("[v0] 🔍 Connection timeout - server may be unreachable")
+        console.error("[v0] 💡 Check if server is running at:", SOCKET_URL)
+      }
+    })
+
+    newSocket.on("disconnect", (reason, details) => {
+      console.log("[v0] 🔌 WebSocket disconnected:")
+      console.log("[v0] Reason:", reason)
+      console.log("[v0] Details:", details)
+
+      if (reason === "transport error") {
+        console.error("[v0] 🔍 Transport error occurred - connection lost")
+      }
+    })
+
+    newSocket.io.on("error", (error) => {
+      console.error("[v0] 🚨 Socket.IO engine error:", error)
+    })
+
+    newSocket.io.engine.on("upgrade", () => {
+      console.log("[v0] 🔄 Transport upgraded to:", newSocket.io.engine.transport.name)
+    })
+
+    newSocket.io.engine.on("upgradeError", (error) => {
+      console.error("[v0] ❌ Transport upgrade failed:", error)
     })
 
     socketRef.current = newSocket

@@ -252,47 +252,45 @@ export const authAPI = {
 
   async login(email: string, password: string): Promise<AuthResponse> {
     try {
-      console.log("[v0] === ДЕТАЛЬНАЯ ОТЛАДКА URL ===")
+      console.log("[v0] === РАСШИРЕННАЯ ДИАГНОСТИКА LOGIN ===")
       console.log(
-        "[v0] process.env:",
-        Object.keys(process.env).filter((key) => key.includes("API")),
+        "[v0] Все переменные окружения с API:",
+        Object.entries(process.env).filter(([key]) => key.includes("API")),
       )
-      console.log("[v0] NEXT_PUBLIC_API_BASE_URL из process.env:", process.env.NEXT_PUBLIC_API_BASE_URL)
-      console.log("[v0] typeof NEXT_PUBLIC_API_BASE_URL:", typeof process.env.NEXT_PUBLIC_API_BASE_URL)
+      console.log("[v0] NEXT_PUBLIC_API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL)
       console.log("[v0] API_BASE_URL константа:", API_BASE_URL)
-      console.log("[v0] window.location.protocol:", typeof window !== "undefined" ? window.location.protocol : "N/A")
+      console.log(
+        "[v0] Текущий протокол страницы:",
+        typeof window !== "undefined" ? window.location.protocol : "server-side",
+      )
+      console.log("[v0] Текущий хост страницы:", typeof window !== "undefined" ? window.location.host : "server-side")
 
       const fullUrl = `${API_BASE_URL}/api/auth/login`
-      console.log("[v0] Полный URL для запроса:", fullUrl)
+      console.log("[v0] Итоговый URL запроса:", fullUrl)
 
+      // Проверяем Mixed Content
       if (typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http:")) {
-        console.warn("[v0] ВНИМАНИЕ: Mixed Content - HTTPS страница пытается обратиться к HTTP API")
-        console.warn("[v0] Это может быть заблокировано браузером из соображений безопасности")
+        console.error("[v0] КРИТИЧЕСКАЯ ОШИБКА: Mixed Content Policy!")
+        console.error("[v0] HTTPS страница не может обращаться к HTTP API")
+        throw new APIError(
+          0,
+          `Mixed Content Error: Браузер блокирует HTTP запросы (${API_BASE_URL}) с HTTPS страницы. Необходимо настроить HTTPS на сервере или использовать HTTP версию сайта.`,
+        )
       }
 
-      console.log("[v0] Проверяю доступность сервера...")
+      console.log("[v0] Отправляю запрос на:", fullUrl)
+      console.log("[v0] Данные для входа:", { email, password: "***" })
 
-      // Проверяем доступность базового URL
       try {
-        const healthCheck = await fetch(API_BASE_URL, {
-          method: "HEAD",
-          mode: "no-cors",
+        const healthCheck = await fetch(`${API_BASE_URL}/health`, {
+          method: "GET",
+          signal: AbortSignal.timeout(5000), // 5 секунд таймаут
         })
         console.log("[v0] Health check статус:", healthCheck.status)
       } catch (healthError) {
-        console.log("[v0] Health check ошибка:", healthError.message)
-        if (healthError.message.includes("Mixed Content") || healthError.message.includes("blocked")) {
-          console.error("[v0] ОШИБКА Mixed Content: Браузер блокирует HTTP запросы с HTTPS страницы")
-          throw new APIError(
-            0,
-            "Браузер блокирует подключение к HTTP серверу с HTTPS страницы. Обратитесь к администратору для настройки HTTPS на сервере.",
-          )
-        }
+        console.warn("[v0] Health check не удался:", healthError.message)
+        console.warn("[v0] Продолжаем с основным запросом...")
       }
-
-      console.log("[v0] === КОНЕЦ ОТЛАДКИ ===")
-
-      console.log("Logging in user:", email)
 
       const response = await fetch(fullUrl, {
         method: "POST",
@@ -300,50 +298,43 @@ export const authAPI = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
+        signal: AbortSignal.timeout(10000), // 10 секунд таймаут
       })
 
-      console.log("Login response status:", response.status)
+      console.log("[v0] Ответ сервера - статус:", response.status)
+      console.log("[v0] Ответ сервера - headers:", Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("Login error:", errorText)
+        console.error("[v0] Ошибка сервера:", errorText)
         throw new APIError(response.status, errorText)
       }
 
       const data = await response.json()
-      console.log("Login success:", data)
+      console.log("[v0] Успешный вход:", { ...data, token: "***" })
       return data
     } catch (error) {
-      console.error("Login fetch error:", error)
-      console.error("[v0] Детали ошибки:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        cause: error.cause,
-      })
+      console.error("[v0] ОШИБКА LOGIN:", error)
+      console.error("[v0] Тип ошибки:", error.constructor.name)
+      console.error("[v0] Сообщение ошибки:", error.message)
 
       if (error instanceof APIError) {
         throw error
       }
 
+      if (error.name === "AbortError") {
+        throw new APIError(0, `Таймаут подключения к серверу ${API_BASE_URL}. Сервер не отвечает в течение 10 секунд.`)
+      }
+
       if (error.message.includes("Failed to fetch")) {
-        const isHttpsToHttp =
-          typeof window !== "undefined" && window.location.protocol === "https:" && API_BASE_URL.startsWith("http:")
-
-        if (isHttpsToHttp) {
-          throw new APIError(
-            0,
-            `Mixed Content Error: Браузер блокирует HTTP запросы (${API_BASE_URL}) с HTTPS страницы. Необходимо настроить HTTPS на сервере или использовать HTTP версию сайта.`,
-          )
-        }
-
+        console.error("[v0] Ошибка 'Failed to fetch' - проблема с сетью или CORS")
         throw new APIError(
           0,
-          `Не удается подключиться к серверу ${API_BASE_URL}. Проверьте подключение к интернету или доступность сервера.`,
+          `Не удается подключиться к серверу ${API_BASE_URL}. Возможные причины: 1) Сервер недоступен, 2) Проблемы с CORS, 3) Блокировка браузером, 4) Неправильный URL эндпоинта`,
         )
       }
 
-      throw new APIError(0, `Network error: ${error.message}`)
+      throw new APIError(0, `Неизвестная ошибка: ${error.message}`)
     }
   },
 }
