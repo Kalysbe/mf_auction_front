@@ -218,6 +218,74 @@ export function getOfferStatusBadgeVariant(
 
 // Authentication API - простые POST запросы
 export const authAPI = {
+  async getCurrentUser(): Promise<User> {
+    try {
+      console.log("[v0] === ДИАГНОСТИКА getCurrentUser ===")
+      console.log("[v0] API_BASE_URL:", API_BASE_URL)
+
+      const token = tokenManager.getToken()
+      console.log("[v0] Токен найден:", !!token)
+
+      if (!token) {
+        throw new APIError(401, "Токен авторизации отсутствует")
+      }
+
+      const fullUrl = `${API_BASE_URL}/api/auth/me`
+      console.log("[v0] Полный URL запроса:", fullUrl)
+
+      const response = await fetchWithRetry(fullUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(15000), // Увеличиваем таймаут
+      })
+
+      console.log("[v0] Ответ /auth/me - статус:", response.status)
+      console.log("[v0] Ответ /auth/me - headers:", Object.fromEntries(response.headers.entries()))
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] Ошибка /auth/me:", errorText)
+
+        if (response.status === 404) {
+          throw new APIError(404, "Эндпоинт /auth/me не найден на сервере. Возможно, он еще не реализован.")
+        }
+
+        throw new APIError(response.status, errorText)
+      }
+
+      const userData = await response.json()
+      console.log("[v0] Данные пользователя из /auth/me:", userData)
+
+      if (!userData || typeof userData !== "object") {
+        throw new APIError(500, "Некорректный формат ответа от сервера")
+      }
+
+      return userData
+    } catch (error) {
+      console.error("[v0] Ошибка getCurrentUser:", error)
+
+      if (error instanceof APIError) {
+        throw error
+      }
+
+      if (error.name === "AbortError") {
+        throw new APIError(0, "Таймаут запроса к серверу. Сервер не отвечает.")
+      }
+
+      if (error.message.includes("Failed to fetch")) {
+        throw new APIError(
+          0,
+          `Не удается подключиться к серверу ${API_BASE_URL}/auth/me. Проверьте доступность сервера.`,
+        )
+      }
+
+      throw new APIError(0, `Ошибка получения данных пользователя: ${error.message}`)
+    }
+  },
+
   async register(email: string, password: string, name: string): Promise<AuthResponse> {
     try {
       console.log("Registering user:", email)
@@ -265,7 +333,7 @@ export const authAPI = {
       )
       console.log("[v0] Текущий хост страницы:", typeof window !== "undefined" ? window.location.host : "server-side")
 
-      const fullUrl = `${API_BASE_URL}/api/auth/login`
+      const fullUrl = `${API_BASE_URL}/auth/login`
       console.log("[v0] Итоговый URL запроса:", fullUrl)
 
       // Проверяем Mixed Content
@@ -281,24 +349,13 @@ export const authAPI = {
       console.log("[v0] Отправляю запрос на:", fullUrl)
       console.log("[v0] Данные для входа:", { email, password: "***" })
 
-      try {
-        const healthCheck = await fetch(`${API_BASE_URL}/health`, {
-          method: "GET",
-          signal: AbortSignal.timeout(5000), // 5 секунд таймаут
-        })
-        console.log("[v0] Health check статус:", healthCheck.status)
-      } catch (healthError) {
-        console.warn("[v0] Health check не удался:", healthError.message)
-        console.warn("[v0] Продолжаем с основным запросом...")
-      }
-
-      const response = await fetch(fullUrl, {
+      const response = await fetchWithRetry(fullUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
-        signal: AbortSignal.timeout(10000), // 10 секунд таймаут
+        signal: AbortSignal.timeout(15000), // Увеличиваем таймаут до 15 секунд
       })
 
       console.log("[v0] Ответ сервера - статус:", response.status)
@@ -323,18 +380,136 @@ export const authAPI = {
       }
 
       if (error.name === "AbortError") {
-        throw new APIError(0, `Таймаут подключения к серверу ${API_BASE_URL}. Сервер не отвечает в течение 10 секунд.`)
+        throw new APIError(0, `Таймаут подключения к серверу ${API_BASE_URL}. Сервер не отвечает в течение 15 секунд.`)
       }
 
       if (error.message.includes("Failed to fetch")) {
         console.error("[v0] Ошибка 'Failed to fetch' - проблема с сетью или CORS")
         throw new APIError(
           0,
-          `Не удается подключиться к серверу ${API_BASE_URL}. Возможные причины: 1) Сервер недоступен, 2) Проблемы с CORS, 3) Блокировка браузером, 4) Неправильный URL эндпоинта`,
+          `Не удается подключиться к серверу ${API_BASE_URL}. Проверьте: 1) Доступность сервера, 2) Настройки CORS, 3) Mixed Content Policy`,
         )
       }
 
-      throw new APIError(0, `Неизвестная ошибка: ${error.message}`)
+      throw new APIError(0, `Сетевая ошибка: ${error.message}`)
+    }
+  },
+
+  async getUserList(): Promise<User[]> {
+    try {
+      console.log("[v0] === ПОЛУЧЕНИЕ СПИСКА ПОЛЬЗОВАТЕЛЕЙ ===")
+      console.log("[v0] API_BASE_URL:", API_BASE_URL)
+
+      const token = tokenManager.getToken()
+      console.log("[v0] Токен найден:", !!token)
+
+      if (!token) {
+        throw new APIError(401, "Токен авторизации отсутствует")
+      }
+
+      const fullUrl = `${API_BASE_URL}/api/user/list`
+      console.log("[v0] Полный URL запроса:", fullUrl)
+
+      const response = await fetchWithRetry(fullUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(15000),
+      })
+
+      console.log("[v0] Ответ /user/list - статус:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] Ошибка /user/list:", errorText)
+        throw new APIError(response.status, errorText)
+      }
+
+      const userList = await response.json()
+      console.log("[v0] Список пользователей получен:", userList.length, "пользователей")
+
+      return userList
+    } catch (error) {
+      console.error("[v0] Ошибка getUserList:", error)
+
+      if (error instanceof APIError) {
+        throw error
+      }
+
+      if (error.name === "AbortError") {
+        throw new APIError(0, "Таймаут запроса к серверу. Сервер не отвечает.")
+      }
+
+      if (error.message.includes("Failed to fetch")) {
+        throw new APIError(
+          0,
+          `Не удается подключиться к серверу ${API_BASE_URL}/user/list. Проверьте доступность сервера.`,
+        )
+      }
+
+      throw new APIError(0, `Ошибка получения списка пользователей: ${error.message}`)
+    }
+  },
+
+  async createUser(email: string, name: string): Promise<User> {
+    try {
+      console.log("[v0] === СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ ===")
+      console.log("[v0] API_BASE_URL:", API_BASE_URL)
+
+      const token = tokenManager.getToken()
+      console.log("[v0] Токен найден:", !!token)
+
+      if (!token) {
+        throw new APIError(401, "Токен авторизации отсутствует")
+      }
+
+      const fullUrl = `${API_BASE_URL}/api/auth/register`
+      console.log("[v0] Полный URL запроса:", fullUrl)
+      console.log("[v0] Данные для создания:", { email, name })
+
+      const response = await fetchWithRetry(fullUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email, name }),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      console.log("[v0] Ответ /auth/register - статус:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] Ошибка /auth/register:", errorText)
+        throw new APIError(response.status, errorText)
+      }
+
+      const userData = await response.json()
+      console.log("[v0] Пользователь создан:", userData)
+
+      return userData
+    } catch (error) {
+      console.error("[v0] Ошибка createUser:", error)
+
+      if (error instanceof APIError) {
+        throw error
+      }
+
+      if (error.name === "AbortError") {
+        throw new APIError(0, "Таймаут запроса к серверу. Сервер не отвечает.")
+      }
+
+      if (error.message.includes("Failed to fetch")) {
+        throw new APIError(
+          0,
+          `Не удается подключиться к серверу ${API_BASE_URL}/auth/register. Проверьте доступность сервера.`,
+        )
+      }
+
+      throw new APIError(0, `Ошибка создания пользователя: ${error.message}`)
     }
   },
 }
@@ -363,4 +538,25 @@ export const tokenManager = {
       return null
     }
   },
+}
+
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      console.log(`[v0] Попытка ${i + 1}/${retries} запроса к:`, url)
+      const response = await fetch(url, options)
+      console.log(`[v0] Ответ получен, статус:`, response.status)
+      return response
+    } catch (error) {
+      console.error(`[v0] Ошибка попытки ${i + 1}:`, error.message)
+
+      if (i === retries - 1) {
+        throw error
+      }
+
+      // Ждем перед повторной попыткой
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
+    }
+  }
+  throw new Error("Все попытки исчерпаны")
 }

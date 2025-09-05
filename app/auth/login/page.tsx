@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState } from "react"
-import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -19,7 +18,7 @@ export default function LoginPage() {
   const { toast } = useToast()
   const { login } = useAuth()
 
-  const [email, setEmail] = useState("")
+  const [login_field, setLoginField] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [showMixedContentWarning, setShowMixedContentWarning] = useState(false)
@@ -29,7 +28,7 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const success = await login(email, password)
+      const success = await login(login_field, password)
 
       if (success) {
         toast({
@@ -40,7 +39,7 @@ export default function LoginPage() {
       } else {
         toast({
           title: "Ошибка входа",
-          description: "Неверный email или пароль",
+          description: "Неверный логин или пароль",
           variant: "destructive",
         })
       }
@@ -79,13 +78,13 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="login">Логин</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="example@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="login"
+                type="text"
+                placeholder="Введите логин"
+                value={login_field}
+                onChange={(e) => setLoginField(e.target.value)}
                 required
               />
             </div>
@@ -105,12 +104,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full bg-primary hover:bg-primary-600" disabled={isLoading}>
               {isLoading ? "Вход..." : "Войти"}
             </Button>
-            <div className="text-center text-sm">
-              Нет аккаунта?{" "}
-              <Link href="/auth/register" className="text-primary hover:underline">
-                Зарегистрироваться
-              </Link>
-            </div>
           </CardFooter>
         </form>
       </Card>

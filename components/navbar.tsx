@@ -17,6 +17,10 @@ import { User, LogOut, FileText } from "lucide-react"
 export default function Navbar() {
   const { user, logout } = useAuth()
 
+  console.log("[v0] Navbar - Current user:", user)
+  console.log("[v0] Navbar - User role:", user?.role)
+  console.log("[v0] Navbar - Is admin?", user?.role === "admin")
+
   return (
     <header className="border-b bg-white shadow-sm">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -44,9 +48,15 @@ export default function Navbar() {
           )}
 
           {user?.role === "admin" && (
-            <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
-              Панель администратора
-            </Link>
+            <>
+              {console.log("[v0] Navbar - Rendering admin links")}
+              <Link href="/admin" className="text-sm font-medium hover:text-primary transition-colors">
+                Панель администратора
+              </Link>
+              <Link href="/admin/users" className="text-sm font-medium hover:text-primary transition-colors">
+                Пользователи
+              </Link>
+            </>
           )}
 
           {user ? (
@@ -80,9 +90,14 @@ export default function Navbar() {
                   </>
                 )}
                 {user.role === "admin" && (
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin/create-auction">Создать аукцион</Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/create-auction">Создать аукцион</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/users">Управление пользователями</Link>
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuItem onClick={logout} className="text-red-600 cursor-pointer">
                   <LogOut className="h-4 w-4 mr-2" />
