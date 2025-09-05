@@ -333,7 +333,7 @@ export const authAPI = {
       )
       console.log("[v0] Текущий хост страницы:", typeof window !== "undefined" ? window.location.host : "server-side")
 
-      const fullUrl = `${API_BASE_URL}/auth/login`
+      const fullUrl = `${API_BASE_URL}/api/auth/login`
       console.log("[v0] Итоговый URL запроса:", fullUrl)
 
       // Проверяем Mixed Content
