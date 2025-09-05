@@ -230,7 +230,7 @@ export const authAPI = {
         throw new APIError(401, "Токен авторизации отсутствует")
       }
 
-      const fullUrl = `${API_BASE_URL}/api/auth/me`
+      const fullUrl = `${API_BASE_URL}/auth/me`
       console.log("[v0] Полный URL запроса:", fullUrl)
 
       const response = await fetchWithRetry(fullUrl, {
@@ -290,7 +290,7 @@ export const authAPI = {
     try {
       console.log("Registering user:", email)
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -333,7 +333,7 @@ export const authAPI = {
       )
       console.log("[v0] Текущий хост страницы:", typeof window !== "undefined" ? window.location.host : "server-side")
 
-      const fullUrl = `${API_BASE_URL}/api/auth/login`
+      const fullUrl = `${API_BASE_URL}/auth/login`
       console.log("[v0] Итоговый URL запроса:", fullUrl)
 
       // Проверяем Mixed Content
@@ -407,7 +407,7 @@ export const authAPI = {
         throw new APIError(401, "Токен авторизации отсутствует")
       }
 
-      const fullUrl = `${API_BASE_URL}/api/user/list`
+      const fullUrl = `${API_BASE_URL}/user/list`
       console.log("[v0] Полный URL запроса:", fullUrl)
 
       const response = await fetchWithRetry(fullUrl, {
@@ -465,7 +465,7 @@ export const authAPI = {
         throw new APIError(401, "Токен авторизации отсутствует")
       }
 
-      const fullUrl = `${API_BASE_URL}/api/auth/register`
+      const fullUrl = `${API_BASE_URL}/auth/register`
       console.log("[v0] Полный URL запроса:", fullUrl)
       console.log("[v0] Данные для создания:", { email, name })
 

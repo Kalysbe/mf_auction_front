@@ -108,21 +108,7 @@ export default function LoginPage() {
         </form>
       </Card>
 
-      {process.env.NODE_ENV === "development" && (
-        <Card className="mt-4 border-gray-200 bg-gray-50">
-          <CardHeader>
-            <CardTitle className="text-sm text-gray-600">Debug Info</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xs text-gray-500 space-y-1">
-              <p>
-                API URL: {process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"}/api/auth/login
-              </p>
-              <p>Проверьте консоль браузера для подробных логов</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+    
     </div>
   )
 }

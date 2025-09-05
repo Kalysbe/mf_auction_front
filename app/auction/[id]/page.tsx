@@ -98,7 +98,7 @@ function formatTimeRemaining(endTime: string) {
 
 const fetchAuctionReport = async (auctionId: string) => {
   try {
-    console.log("[v0] Fetching auction report for ID:", auctionId)
+ 
 
     const token = tokenManager.getToken()
     if (!token) {
@@ -113,7 +113,7 @@ const fetchAuctionReport = async (auctionId: string) => {
       },
     })
 
-    console.log("[v0] Report API response status:", response.status)
+
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -122,7 +122,7 @@ const fetchAuctionReport = async (auctionId: string) => {
     }
 
     const reportData = await response.json()
-    console.log("[v0] Report data received:", reportData)
+    
 
     return reportData
   } catch (error) {
@@ -168,6 +168,26 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   const [term_month, setLotTermMonth] = useState("") // Добавлено состояние для срока размещения депозита
   const [isCreatingLot, setIsCreatingLot] = useState(false)
 
+  const formatVolumeInput = (value: string) => {
+    // Удаляем все пробелы и нечисловые символы кроме точки
+    const cleanValue = value.replace(/[^\d.]/g, "")
+
+    // Разделяем на целую и дробную части
+    const parts = cleanValue.split(".")
+    const integerPart = parts[0]
+    const decimalPart = parts[1]
+
+    // Форматируем целую часть с пробелами как разделителями тысяч
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+
+    // Возвращаем отформатированное значение
+    return decimalPart !== undefined ? `${formattedInteger}.${decimalPart}` : formattedInteger
+  }
+
+  const getNumericValue = (formattedValue: string) => {
+    return formattedValue.replace(/\s/g, "")
+  }
+
   const auction = auctions.find((a) => a.id === params.id) || currentAuction
   const selectedLot = lots.find((lot) => lot.id === selectedLotId)
 
@@ -188,7 +208,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   // Simplified join auction function - just join, lots will be loaded automatically by useWebSocket
   const handleJoinAuction = useCallback(() => {
     if (isConnected && params.id && !hasJoined) {
-      console.log("🚪 Joining auction:", params.id)
+    
       joinAuction(params.id)
       setHasJoined(true)
 
@@ -212,14 +232,14 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
 
   // Log selectedLot.offers changes for debugging
   useEffect(() => {
-    console.log("selectedLot or selectedLot.offers changed. Current offers:", selectedLot?.offers)
+   
   }, [selectedLot])
 
   const handleCreateLot = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!auction || !lotAsset || !lotVolume || !lotPercent || !term_month) return
 
-    const volume = Number.parseFloat(lotVolume)
+    const volume = Number.parseFloat(getNumericValue(lotVolume))
     const percent = Number.parseFloat(lotPercent)
     const termMonth = Number.parseInt(term_month)
 
@@ -235,7 +255,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
     if (isNaN(percent) || percent <= 0) {
       toast({
         title: "Ошибка",
-        description: "Введите корректную процентную ставку",
+        description: "Введите корректную минимальную ставку",
         variant: "destructive",
       })
       return
@@ -255,7 +275,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
       const lotData = {
         auction_id: auction.id,
         asset: lotAsset,
-        volume: lotVolume,
+        volume: getNumericValue(lotVolume), // Отправляем числовое значение без пробелов
         percent: lotPercent,
         term_month: termMonth, // Добавлено поле term_month в данные лота
       }
@@ -409,12 +429,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   const handleCancelOffer = async (offerId: string, offerUserId: string) => {
     try {
       // Добавлено детальное логирование для отладки
-      console.log("[v0] Starting offer cancellation process")
-      console.log("[v0] Offer ID to cancel:", offerId)
-      console.log("[v0] Offer user ID:", offerUserId)
-      console.log("[v0] Current user ID:", user?.id)
-      console.log("[v0] Current user role:", user?.role)
-      console.log("[v0] Can cancel offer check:", canCancelOffer({ id: offerId, user_id: offerUserId }))
+ 
 
       cancelOffer(offerId)
 
@@ -538,10 +553,26 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
         {/* Connection Status */}
         <div className="flex items-center gap-2 text-sm">
           <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}></div>
-          <span className={isConnected ? "text-green-600" : "text-red-600"}>
+          <span
+            className="font-medium"
+            style={{
+              color: isConnected ? "#166534 !important" : "#991b1b !important",
+              fontWeight: "500",
+            }}
+          >
             {isConnected ? "Подключено к серверу" : "Подключение к серверу..."}
           </span>
-          {hasJoined && <span className="text-blue-600 ml-2">• Присоединился к аукциону</span>}
+          {hasJoined && (
+            <span
+              className="font-medium ml-2"
+              style={{
+                color: "#1e40af !important",
+                fontWeight: "500",
+              }}
+            >
+              • Присоединился к аукциону
+            </span>
+          )}
         </div>
 
         {/* Time Warning */}
@@ -769,17 +800,15 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
                       <Label htmlFor="lotVolume">Объем</Label>
                       <Input
                         id="lotVolume"
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
                         value={lotVolume}
-                        onChange={(e) => setLotVolume(e.target.value)}
-                        placeholder="300000"
+                        onChange={(e) => setLotVolume(formatVolumeInput(e.target.value))}
+                        placeholder="300 000"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lotPercent">Процентная ставка (%)</Label>
+                      <Label htmlFor="lotPercent">Минимальная ставка (%)</Label>
                       <Input
                         id="lotPercent"
                         type="number"

@@ -42,7 +42,7 @@ export default function DocumentsPage() {
   const fetchDocumentTypes = async () => {
     try {
       console.log("[v0] Fetching document types...")
-      const response = await fetch(`${API_BASE_URL}/api/file/type/list`, {
+      const response = await fetch(`${API_BASE_URL}/file/type/list`, {
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
           "Content-Type": "application/json",
@@ -66,7 +66,7 @@ export default function DocumentsPage() {
   const fetchUserDocuments = async () => {
     try {
       console.log("[v0] Fetching user documents...")
-      const response = await fetch(`${API_BASE_URL}/api/file/my-list/`, {
+      const response = await fetch(`${API_BASE_URL}/file/my-list/`, {
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
           "Content-Type": "application/json",
@@ -99,7 +99,7 @@ export default function DocumentsPage() {
       formData.append("file", file)
       formData.append("file_type_id", fileTypeId)
 
-      const response = await fetch(`${API_BASE_URL}/api/file/upload`, {
+      const response = await fetch(`${API_BASE_URL}/file/upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
@@ -136,7 +136,7 @@ export default function DocumentsPage() {
     try {
       console.log("[v0] Deleting document:", documentId)
 
-      const response = await fetch(`${API_BASE_URL}/api/file/${documentId}`, {
+      const response = await fetch(`${API_BASE_URL}/file/${documentId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
