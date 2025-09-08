@@ -98,8 +98,6 @@ function formatTimeRemaining(endTime: string) {
 
 const fetchAuctionReport = async (auctionId: string) => {
   try {
- 
-
     const token = tokenManager.getToken()
     if (!token) {
       throw new Error("No authentication token")
@@ -113,8 +111,6 @@ const fetchAuctionReport = async (auctionId: string) => {
       },
     })
 
-
-
     if (!response.ok) {
       const errorText = await response.text()
       console.error("[v0] Report API error:", errorText)
@@ -122,8 +118,6 @@ const fetchAuctionReport = async (auctionId: string) => {
     }
 
     const reportData = await response.json()
-    
-
     return reportData
   } catch (error) {
     console.error("[v0] Error fetching auction report:", error)
@@ -208,7 +202,6 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   // Simplified join auction function - just join, lots will be loaded automatically by useWebSocket
   const handleJoinAuction = useCallback(() => {
     if (isConnected && params.id && !hasJoined) {
-    
       joinAuction(params.id)
       setHasJoined(true)
 
@@ -231,9 +224,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   }, [params.id])
 
   // Log selectedLot.offers changes for debugging
-  useEffect(() => {
-   
-  }, [selectedLot])
+  useEffect(() => {}, [selectedLot])
 
   const handleCreateLot = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -429,8 +420,6 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   const handleCancelOffer = async (offerId: string, offerUserId: string) => {
     try {
       // Добавлено детальное логирование для отладки
- 
-
       cancelOffer(offerId)
 
       toast({
@@ -482,10 +471,11 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
     console.log("[v0] Lot status:", lot.status)
     console.log("[v0] Auction status:", auction?.status)
 
-    const canClose = user?.role === "initiator" && lot.status === "open" && auction?.status === "open"
+    const canClose =
+      (user?.role === "initiator" || user?.role === "admin") && lot.status === "open" && auction?.status === "open"
     console.log("[v0] Can close lot result:", canClose)
 
-    // Только инициатор может закрывать лоты
+    // Инициатор и админ могут закрывать лоты
     return canClose
   }
 
@@ -1055,7 +1045,24 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
                             {getOfferStatusDisplayText(offer.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatOfferDate(offer.created_at)}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            console.log("[v0] Offer time data:", {
+                              id: offer.id,
+                              created_at: offer.created_at,
+                              type: typeof offer.created_at,
+                            })
+
+                            if (!offer.created_at) {
+                              return <span className="text-gray-400 italic">Время не указано</span>
+                            }
+
+                            const formattedTime = formatOfferDate(offer.created_at)
+                            console.log("[v0] Formatted time:", formattedTime)
+
+                            return <span className="text-sm">{formattedTime}</span>
+                          })()}
+                        </TableCell>
                         <TableCell className="text-right">
                           {canCancelOffer(offer) && offer.status === "pending" && normalizedStatus === "active" && (
                             <Button

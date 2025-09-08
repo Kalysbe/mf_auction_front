@@ -395,12 +395,12 @@ export function useWebSocket() {
       socketRef.current.disconnect()
     }
 
-    const SOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "https://mfa.kse.kg:8443"
+    const SOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || "https://mfa.kse.kg"
 
     console.log("[v0] ===== WebSocket Connection Debug =====")
     console.log("[v0] Environment variable NEXT_PUBLIC_WEBSOCKET_URL:", process.env.NEXT_PUBLIC_WEBSOCKET_URL)
     console.log("[v0] Environment variable NEXT_PUBLIC_API_BASE_URL:", process.env.NEXT_PUBLIC_API_BASE_URL)
-    console.log("[v0] Fallback WebSocket URL:", "https://mfa.kse.kg:8443")
+    console.log("[v0] Fallback WebSocket URL:", "https://mfa.kse.kg")
     console.log("[v0] Final SOCKET_URL:", SOCKET_URL)
     console.log("[v0] WebSocket will connect to:", SOCKET_URL)
     console.log(
@@ -415,18 +415,20 @@ export function useWebSocket() {
       auth: {
         token: token,
       },
-      // Try polling first, then websocket as fallback
-      transports: ["polling", "websocket"],
-      timeout: 20000, // Increased timeout
+      transports: ["polling"],
+      timeout: 45000, // Increased timeout to 45 seconds
       reconnection: true,
-      reconnectionAttempts: 5, // More attempts
+      reconnectionAttempts: 15, // More reconnection attempts
       reconnectionDelay: 3000, // Longer delay between attempts
-      reconnectionDelayMax: 10000,
-      // Force new connection
+      reconnectionDelayMax: 20000,
       forceNew: true,
-      // Additional options for better compatibility
-      upgrade: true,
+      upgrade: false,
       rememberUpgrade: false,
+      autoConnect: true,
+      closeOnBeforeunload: false,
+      withCredentials: false,
+      timestampRequests: true,
+      timestampParam: "t",
     })
 
     newSocket.on("connect", () => {
@@ -448,7 +450,15 @@ export function useWebSocket() {
       console.error("[v0] Current transport attempt:", newSocket.io.engine?.transport?.name || "none")
       console.error("[v0] Full error object:", error)
 
-      // Check for specific error types
+      if (error.message.includes("xhr poll error")) {
+        console.error("[v0] 🔍 XHR Polling failed - this could be due to:")
+        console.error("[v0] - Server not responding to HTTP requests")
+        console.error("[v0] - CORS policy blocking polling requests")
+        console.error("[v0] - Server not running Socket.IO on this URL")
+        console.error("[v0] - Network connectivity issues")
+        console.error("[v0] 💡 Check server availability at:", SOCKET_URL)
+      }
+
       if (error.message.includes("websocket error")) {
         console.error("[v0] 🔍 WebSocket transport failed - this could be due to:")
         console.error("[v0] - Server not supporting WebSocket protocol")
@@ -484,6 +494,24 @@ export function useWebSocket() {
 
     newSocket.io.engine.on("upgradeError", (error) => {
       console.error("[v0] ❌ Transport upgrade failed:", error)
+      console.log("[v0] 🔄 Retrying connection with polling only...")
+      setTimeout(() => {
+        if (!newSocket.connected) {
+          newSocket.connect()
+        }
+      }, 5000)
+    })
+
+    newSocket.io.engine.on("transportError", (error) => {
+      console.error("[v0] 🚨 Transport error:", error)
+      console.log("[v0] 💡 This may be due to server unavailability or network issues")
+      console.log("[v0] 🔄 Will retry connection in 10 seconds...")
+      setTimeout(() => {
+        if (!newSocket.connected) {
+          console.log("[v0] 🔄 Retrying connection after transport error...")
+          newSocket.connect()
+        }
+      }, 10000)
     })
 
     socketRef.current = newSocket

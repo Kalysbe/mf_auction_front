@@ -528,13 +528,58 @@ export const tokenManager = {
     localStorage.removeItem("auth_token")
   },
 
-  // Decode JWT token to get user info
   decodeToken(token: string): any {
     try {
-      const payload = token.split(".")[1]
-      return JSON.parse(atob(payload))
+      console.log("[v0] Декодирование токена...")
+
+      // Проверяем, что токен существует и является строкой
+      if (!token || typeof token !== "string") {
+        console.error("[v0] Токен отсутствует или не является строкой:", typeof token)
+        return null
+      }
+
+      // Проверяем формат JWT токена (должен содержать 3 части, разделенные точками)
+      const parts = token.split(".")
+      if (parts.length !== 3) {
+        console.error("[v0] Неверный формат JWT токена. Ожидается 3 части, получено:", parts.length)
+        return null
+      }
+
+      const payload = parts[1]
+
+      // Проверяем, что payload не пустой
+      if (!payload) {
+        console.error("[v0] Пустой payload в токене")
+        return null
+      }
+
+      // Добавляем padding если необходимо для корректного base64 декодирования
+      let paddedPayload = payload
+      while (paddedPayload.length % 4) {
+        paddedPayload += "="
+      }
+
+      console.log("[v0] Payload для декодирования:", paddedPayload.substring(0, 50) + "...")
+
+      // Пытаемся декодировать base64
+      const decoded = atob(paddedPayload)
+      console.log("[v0] Base64 декодирование успешно")
+
+      // Пытаемся парсить JSON
+      const parsed = JSON.parse(decoded)
+      console.log("[v0] JSON парсинг успешно, роль пользователя:", parsed.role)
+
+      return parsed
     } catch (error) {
-      console.error("Error decoding token:", error)
+      console.error("[v0] Ошибка декодирования токена:", error.message)
+      console.error("[v0] Тип ошибки:", error.constructor.name)
+
+      if (error.message.includes("atob")) {
+        console.error("[v0] Ошибка base64 декодирования. Токен может быть поврежден.")
+      } else if (error.message.includes("JSON")) {
+        console.error("[v0] Ошибка парсинга JSON. Payload не является валидным JSON.")
+      }
+
       return null
     }
   },

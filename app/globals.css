@@ -5,25 +5,33 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --foreground: 215 25% 27%;
+    --card: 210 17% 98%;
+    --card-foreground: 215 20% 22%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 184 47% 55%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 184 47% 55%;
+    --popover-foreground: 215 25% 27%;
+    --primary: 188 78% 41%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 225 71% 77%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 210 17% 98%;
+    --muted-foreground: 215 25% 27%;
+    --accent: 225 71% 77%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 343 84% 43%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 0 0% 100%;
+    --ring: 225 71% 77%;
     --radius: 0.5rem;
+    --sidebar: 210 17% 98%;
+    --sidebar-foreground: 215 25% 27%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 215 25% 27%;
+    --sidebar-accent: 225 71% 77%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 225 71% 77%;
   }
 
   .dark {
@@ -33,7 +41,7 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 184 47% 55%;
+    --primary: 188 78% 41%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -45,7 +53,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 184 47% 55%;
+    --ring: 188 78% 41%;
   }
 }
 

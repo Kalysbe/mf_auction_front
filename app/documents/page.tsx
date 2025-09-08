@@ -4,16 +4,10 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, Download, Trash2, CheckCircle, XCircle, Clock } from "lucide-react"
+import { FileText, Download, Trash2, CheckCircle, XCircle, Clock } from "lucide-react"
 import { tokenManager } from "@/lib/api"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"
-
-interface DocumentType {
-  id: string
-  name: string
-  required: boolean
-}
 
 interface UserDocument {
   id: string
@@ -29,39 +23,13 @@ interface UserDocument {
 }
 
 export default function DocumentsPage() {
-  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([])
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchDocumentTypes()
     fetchUserDocuments()
   }, [])
-
-  const fetchDocumentTypes = async () => {
-    try {
-      console.log("[v0] Fetching document types...")
-      const response = await fetch(`${API_BASE_URL}/file/type/list`, {
-        headers: {
-          Authorization: `Bearer ${tokenManager.getToken()}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      console.log("[v0] Document types response status:", response.status)
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log("[v0] Document types data:", data)
-        setDocumentTypes(data)
-      } else {
-        console.error("[v0] Failed to fetch document types:", response.statusText)
-      }
-    } catch (error) {
-      console.error("[v0] Error fetching document types:", error)
-    }
-  }
 
   const fetchUserDocuments = async () => {
     try {
@@ -69,7 +37,6 @@ export default function DocumentsPage() {
       const response = await fetch(`${API_BASE_URL}/file/my-list/`, {
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
-          "Content-Type": "application/json",
         },
       })
 
@@ -202,7 +169,7 @@ export default function DocumentsPage() {
     <div className="container mx-auto p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Управление документами</h1>
-        <p className="text-gray-600 mt-2">Загрузите все необходимые документы для участия в аукционах</p>
+        <p className="text-gray-600 mt-2">Просмотр загруженных документов</p>
       </div>
 
       {/* Загруженные документы */}
@@ -254,58 +221,13 @@ export default function DocumentsPage() {
       {/* Загрузка новых документов */}
       <Card>
         <CardHeader>
-          <CardTitle>Загрузить документы</CardTitle>
-          <CardDescription>Выберите тип документа и загрузите файл (PDF или Word)</CardDescription>
+          <CardTitle>Загрузка документов</CardTitle>
+          <CardDescription>Для загрузки новых документов обратитесь к администратору</CardDescription>
         </CardHeader>
         <CardContent>
-          {documentTypes.length === 0 ? (
-            <p className="text-gray-500">Нет доступных типов документов</p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {documentTypes.map((docType) => {
-                const userDoc = userDocuments.find((d) => d.file_type_id === docType.id)
-                const isUploaded = !!userDoc
-                const isUploading = uploading === docType.id
-
-                return (
-                  <div key={docType.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-medium">{docType.name}</h3>
-                      {docType.required && <Badge variant="destructive">Обязательный</Badge>}
-                    </div>
-
-                    {isUploaded && (
-                      <div className="mb-3 p-2 bg-gray-50 rounded text-sm">
-                        <div className="flex items-center space-x-1">
-                          {getStatusIcon(userDoc.status)}
-                          <span>Статус: {getStatusText(userDoc.status)}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            handleFileUpload(docType.id, file)
-                          }
-                        }}
-                        disabled={isUploading}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                      />
-                      <Button variant="outline" className="w-full bg-transparent" disabled={isUploading}>
-                        <Upload className="h-4 w-4 mr-2" />
-                        {isUploading ? "Загрузка..." : isUploaded ? "Заменить файл" : "Выбрать файл"}
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <p className="text-gray-500">
+            Загрузка документов временно недоступна. Обратитесь к администратору для загрузки необходимых документов.
+          </p>
         </CardContent>
       </Card>
     </div>

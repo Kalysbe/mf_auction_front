@@ -3,16 +3,16 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { CheckCircle, Loader2, Upload, FileText, X } from "lucide-react"
 import { tokenManager } from "@/lib/api"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://mfauction.adb-solution.com"
 
 interface DocumentType {
   id: string
-  title: string
+  name: string
+  required: boolean
 }
 
 interface UploadedDocument {
@@ -23,6 +23,7 @@ interface UploadedDocument {
   url: string
   createdAt: string
   updatedAt: string
+  file_name?: string
 }
 
 interface DocumentUploadModalProps {
@@ -37,16 +38,15 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
   const [uploadedDocuments, setUploadedDocuments] = useState<UploadedDocument[]>([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
+  const [responsibilityAccepted, setResponsibilityAccepted] = useState(false)
+  const [documentsByType, setDocumentsByType] = useState<Record<string, UploadedDocument[]>>({})
 
-  // Загрузка типов документов
   const fetchDocumentTypes = async () => {
     try {
-      const token = tokenManager.getToken()
-      if (!token) return
-
-      const response = await fetch(`${API_BASE_URL}/api/file/type/list`, {
+      console.log("[v0] Загружаем типы документов с API...")
+      const response = await fetch(`${API_BASE_URL}/file/type/list`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenManager.getToken()}`,
           "Content-Type": "application/json",
         },
       })
@@ -54,341 +54,340 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
       if (response.ok) {
         const types = await response.json()
         console.log("[v0] Получены типы документов:", types)
-        setDocumentTypes(types || [])
+
+        const mappedTypes = types.map((type: any) => ({
+          id: type.id,
+          name: type.title,
+          required: true,
+        }))
+
+        console.log("[v0] Обработанные типы документов:", mappedTypes)
+        setDocumentTypes(mappedTypes || [])
+      } else {
+        console.error("[v0] Ошибка при получении типов документов:", response.status)
+        setDocumentTypes([
+          { id: "passport", name: "Паспорт", required: true },
+          { id: "income_certificate", name: "Справка о доходах", required: true },
+          { id: "bank_statement", name: "Банковская выписка", required: true },
+        ])
       }
     } catch (error) {
-      console.error("[v0] Ошибка при получении типов документов:", error)
+      console.error("[v0] Исключение при получении типов документов:", error)
+      setDocumentTypes([
+        { id: "passport", name: "Паспорт", required: true },
+        { id: "income_certificate", name: "Справка о доходах", required: true },
+        { id: "bank_statement", name: "Банковская выписка", required: true },
+      ])
     }
   }
 
-  // Загрузка загруженных документов пользователя
-  const fetchUploadedDocuments = async () => {
+  const fetchUserDocuments = async () => {
     try {
-      const token = tokenManager.getToken()
-      if (!token) return
-
-      console.log("[v0] Запрашиваем список документов пользователя...")
-
-      const response = await fetch(`${API_BASE_URL}/api/file/my-list/`, {
+      console.log("[v0] Fetching user documents for auction:", auctionId)
+      const response = await fetch(`${API_BASE_URL}/file/auction/${auctionId}/files/`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenManager.getToken()}`,
           "Content-Type": "application/json",
         },
       })
 
-      console.log("[v0] Статус ответа API my-list:", response.status)
-
       if (response.ok) {
-        const auctionData = await response.json()
-        console.log("[v0] Полный ответ API my-list:", JSON.stringify(auctionData, null, 2))
+        const documents = await response.json()
+        console.log("[v0] Получены документы пользователя для аукциона:", documents)
+        setUploadedDocuments(documents || [])
 
-        let allFiles: UploadedDocument[] = []
-        if (Array.isArray(auctionData)) {
-          auctionData.forEach((auction) => {
-            if (auction.files && Array.isArray(auction.files)) {
-              allFiles = [...allFiles, ...auction.files]
-            }
-          })
-        }
-
-        console.log("[v0] Извлеченные файлы:", allFiles)
-        setUploadedDocuments(allFiles)
+        const grouped = (documents || []).reduce((acc: Record<string, UploadedDocument[]>, doc: UploadedDocument) => {
+          if (!acc[doc.file_type]) {
+            acc[doc.file_type] = []
+          }
+          acc[doc.file_type].push(doc)
+          return acc
+        }, {})
+        setDocumentsByType(grouped)
       } else {
-        const errorText = await response.text()
-        console.error("[v0] Ошибка API my-list:", response.status, errorText)
+        console.error("[v0] Ошибка при получении документов пользователя:", response.status)
       }
     } catch (error) {
-      console.error("[v0] Исключение при получении загруженных документов:", error)
+      console.error("[v0] Исключение при получении документов пользователя:", error)
     }
   }
 
-  // Загрузка файла
-  const handleFileUpload = async (typeId: string, file: File) => {
+  const handleFileUpload = async (file: File, documentType: string) => {
     if (!file) return
 
-    // Проверка типа файла
+    const maxSize = 10 * 1024 * 1024 // 10MB в байтах
+    if (file.size > maxSize) {
+      alert(
+        `Файл слишком большой. Максимальный размер: 10MB. Размер вашего файла: ${(file.size / 1024 / 1024).toFixed(1)}MB`,
+      )
+      return
+    }
+
+    // Проверяем формат файла
     const allowedTypes = [
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ]
+
     if (!allowedTypes.includes(file.type)) {
-      alert("Разрешены только файлы PDF и Word (.doc, .docx)")
+      alert("Разрешены только файлы форматов PDF и Word (.doc, .docx)")
       return
     }
 
-    // Проверка размера файла (максимум 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Размер файла не должен превышать 10MB")
-      return
-    }
-
-    setUploading(typeId)
+    setUploading(documentType)
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("file_type", documentType)
+    formData.append("auction_id", auctionId)
 
     try {
-      const token = tokenManager.getToken()
-      if (!token) {
-        alert("Необходима авторизация")
-        return
-      }
+      console.log("[v0] Загружаем файл:", {
+        documentType,
+        fileName: file.name,
+        fileSize: `${(file.size / 1024 / 1024).toFixed(1)}MB`,
+        auctionId,
+      })
 
-      const documentType = documentTypes.find((type) => type.id === typeId)
-      const fileTypeName = documentType?.title || ""
-
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("file_type", fileTypeName)
-      formData.append("auction_id", auctionId)
-
-      console.log("[v0] Загружаем файл:", file.name, "для типа:", typeId)
-      console.log("[v0] Название типа документа:", fileTypeName)
-      console.log("[v0] ID аукциона:", auctionId)
-      console.log("[v0] Размер файла:", file.size, "байт")
-      console.log("[v0] Тип файла:", file.type)
-      console.log("[v0] Отправляемые данные FormData:")
-      console.log("[v0] - file:", file.name)
-      console.log("[v0] - file_type:", fileTypeName)
-      console.log("[v0] - auction_id:", auctionId)
-
-      const response = await fetch(`${API_BASE_URL}/api/file/create`, {
+      const response = await fetch(`${API_BASE_URL}/api/file/upload`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
-          // Не добавляем Content-Type для FormData - браузер сам установит правильный заголовок
+          Authorization: `Bearer ${tokenManager.getToken()}`,
         },
         body: formData,
       })
 
-      console.log("[v0] Статус ответа загрузки:", response.status)
-      console.log("[v0] Заголовки ответа:", Object.fromEntries(response.headers.entries()))
-
       if (response.ok) {
         const result = await response.json()
         console.log("[v0] Файл успешно загружен:", result)
-
-        // Обновляем список загруженных документов
-        await fetchUploadedDocuments()
-
-        // Проверяем, все ли документы загружены
-        checkDocumentsComplete()
+        await fetchUserDocuments()
       } else {
-        const errorText = await response.text()
-        console.error("[v0] Ошибка загрузки файла:", response.status, errorText)
-        alert(`Ошибка при загрузке файла: ${response.status} ${errorText}`)
+        if (response.status === 413) {
+          alert("Файл слишком большой для загрузки на сервер. Пожалуйста, уменьшите размер файла до 10MB или меньше.")
+        } else {
+          console.error("[v0] Ошибка загрузки файла:", response.status)
+          alert(`Ошибка при загрузке файла (код: ${response.status}). Попробуйте еще раз.`)
+        }
       }
     } catch (error) {
       console.error("[v0] Исключение при загрузке файла:", error)
-      alert(`Ошибка при загрузке файла: ${error}`)
+      alert("Ошибка сети при загрузке файла. Проверьте подключение к интернету.")
     } finally {
       setUploading(null)
     }
   }
 
-  // Проверка завершенности загрузки всех документов
-  const checkDocumentsComplete = () => {
-    const requiredTypes = documentTypes
-    const uploadedFileTypes = uploadedDocuments.map((doc) => doc.file_type)
-    const uploadedTypeIds = documentTypes
-      .filter((type) => uploadedFileTypes.includes(type.title))
-      .map((type) => type.id)
+  const isDocumentUploaded = (documentType: string) => {
+    return documentsByType[documentType] && documentsByType[documentType].length > 0
+  }
 
-    const allRequiredUploaded = requiredTypes.every((type) => uploadedTypeIds.includes(type.id))
+  const checkDocumentsComplete = () => {
+    const requiredTypes = documentTypes.filter((type) => type.required).map((type) => type.id)
+    const uploadedTypes = Object.keys(documentsByType).filter((type) => documentsByType[type].length > 0)
+    const allRequiredUploaded = requiredTypes.every((type) => uploadedTypes.includes(type))
 
     console.log("[v0] Проверка документов:")
-    console.log("[v0] Обязательные типы:", requiredTypes.length)
-    console.log("[v0] Загруженные типы файлов:", uploadedFileTypes)
-    console.log("[v0] Сопоставленные ID типов:", uploadedTypeIds)
+    console.log("[v0] Обязательные типы:", requiredTypes)
+    console.log("[v0] Загруженные типы:", uploadedTypes)
     console.log("[v0] Все обязательные загружены:", allRequiredUploaded)
+    console.log("[v0] Ответственность принята:", responsibilityAccepted)
 
-    if (allRequiredUploaded && requiredTypes.length > 0) {
-      console.log("[v0] Все обязательные документы загружены, закрываем модальное окно")
-      onDocumentsComplete()
-    } else {
-      console.log("[v0] Не все документы загружены, модальное окно остается открытым")
-    }
+    return allRequiredUploaded
   }
 
-  // Получение статуса документа по типу
-  const getDocumentStatus = (typeId: string) => {
-    const documentType = documentTypes.find((type) => type.id === typeId)
-    if (!documentType) return null
-
-    const doc = uploadedDocuments.find((d) => d.file_type === documentType.title)
-    return doc ? "approved" : null // Все загруженные документы считаем одобренными
+  const handleParticipateClick = () => {
+    console.log("[v0] Пользователь принял ответственность и готов участвовать в аукционе")
+    onDocumentsComplete()
   }
 
-  const getDocumentFilename = (typeId: string) => {
-    const documentType = documentTypes.find((type) => type.id === typeId)
-    if (!documentType) return null
-
-    const doc = uploadedDocuments.find((d) => d.file_type === documentType.title)
-    if (!doc) return null
-
-    // Извлекаем имя файла из URL
-    const urlParts = doc.url.split("/")
-    return urlParts[urlParts.length - 1] || "Загруженный файл"
-  }
-
-  const getUploadDate = (typeId: string) => {
-    const documentType = documentTypes.find((type) => type.id === typeId)
-    if (!documentType) return null
-
-    const doc = uploadedDocuments.find((d) => d.file_type === documentType.title)
-    if (!doc) return null
-
-    return new Date(doc.createdAt).toLocaleDateString("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const isReadyToParticipate = () => {
+    return checkDocumentsComplete() && responsibilityAccepted
   }
 
   useEffect(() => {
     if (isOpen) {
       setLoading(true)
-      Promise.all([fetchDocumentTypes(), fetchUploadedDocuments()]).finally(() => setLoading(false))
+      setResponsibilityAccepted(false)
+      Promise.all([fetchDocumentTypes(), fetchUserDocuments()]).finally(() => setLoading(false))
     }
   }, [isOpen])
 
-  const getStatusIcon = (status: string | null) => {
-    switch (status) {
-      case "approved":
-        return <CheckCircle className="h-5 w-5 text-green-500" />
-      case "rejected":
-        return <XCircle className="h-5 w-5 text-red-500" />
-      case "pending":
-        return <Loader2 className="h-5 w-5 text-yellow-500 animate-spin" />
-      default:
-        return <FileText className="h-5 w-5 text-gray-400" />
-    }
-  }
-
-  const getStatusBadge = (status: string | null) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge variant="default" className="bg-green-500">
-            Одобрен
-          </Badge>
-        )
-      case "rejected":
-        return <Badge variant="destructive">Отклонен</Badge>
-      case "pending":
-        return <Badge variant="secondary">На проверке</Badge>
-      default:
-        return <Badge variant="outline">Не загружен</Badge>
-    }
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Загрузка документов для участия в аукционе</DialogTitle>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden bg-card">
+        <DialogHeader className="pb-6 border-b border-border">
+          <DialogTitle className="text-2xl font-bold text-foreground flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+            Загрузка документов для участия в аукционе
+          </DialogTitle>
         </DialogHeader>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Загрузка...</span>
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center space-y-4">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+              <p className="text-muted-foreground text-lg">Загружаем информацию о документах...</p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="text-sm text-gray-600 mb-4">
-              Для участия в аукционе необходимо загрузить все обязательные документы. Документы должны быть в формате
-              PDF или Word (.doc, .docx).
-            </div>
+          <div className="overflow-y-auto max-h-[calc(90vh-200px)]">
+            <div className="space-y-6 p-1">
+              <div className="bg-muted/50 p-4 rounded-lg border border-border">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Загрузите необходимые документы для участия в аукционе. Принимаются только файлы форматов{" "}
+                  <span className="font-semibold text-primary">PDF</span> и{" "}
+                  <span className="font-semibold text-primary">Word (.doc, .docx)</span>. Вы можете загрузить несколько
+                  файлов для каждого типа документа.
+                </p>
+              </div>
 
-            <div className="grid gap-4">
-              {documentTypes.map((type) => {
-                const status = getDocumentStatus(type.id)
-                const filename = getDocumentFilename(type.id)
-                const isUploading = uploading === type.id
-
-                return (
-                  <Card key={type.id} className="relative">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {getStatusIcon(status)}
-                          <div>
-                            <CardTitle className="text-base">
-                              {type.title}
-                              <span className="text-red-500 ml-1">*</span>
-                            </CardTitle>
-                          </div>
-                        </div>
-                        {getStatusBadge(status)}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          {filename && (
-                            <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                              <p className="text-sm font-medium text-green-800 mb-1">Загруженный файл:</p>
-                              <p className="text-sm text-green-700">{filename}</p>
-                              {getUploadDate(type.id) && (
-                                <p className="text-xs text-green-600 mt-1">Загружен: {getUploadDate(type.id)}</p>
-                              )}
-                            </div>
+              <div className="space-y-4">
+                {documentTypes.map((docType) => (
+                  <div
+                    key={docType.id}
+                    className="bg-card border border-border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`p-2 rounded-lg ${isDocumentUploaded(docType.id) ? "bg-green-100" : "bg-muted"}`}
+                        >
+                          {isDocumentUploaded(docType.id) ? (
+                            <CheckCircle className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <FileText className="h-5 w-5 text-muted-foreground" />
                           )}
-
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                handleFileUpload(type.id, file)
-                              }
-                            }}
-                            disabled={isUploading}
-                            className="hidden"
-                            id={`file-${type.id}`}
-                          />
-
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isUploading}
-                            onClick={() => document.getElementById(`file-${type.id}`)?.click()}
-                            className="w-full sm:w-auto"
-                          >
-                            {isUploading ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Загрузка...
-                              </>
-                            ) : status === "approved" ? (
-                              <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                Заменить файл
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                Выбрать файл
-                              </>
-                            )}
-                          </Button>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground text-lg">
+                            {docType.name}
+                            {docType.required && <span className="text-destructive ml-1">*</span>}
+                          </h3>
+                          {isDocumentUploaded(docType.id) && (
+                            <p className="text-sm text-green-600 font-medium">
+                              Загружено файлов: {documentsByType[docType.id]?.length || 0}
+                            </p>
+                          )}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
+                    </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={onClose}>
-                Закрыть
-              </Button>
+                    {documentsByType[docType.id] && documentsByType[docType.id].length > 0 && (
+                      <div className="mb-4 space-y-2">
+                        {documentsByType[docType.id].map((doc, index) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200"
+                          >
+                            <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            <span className="text-sm text-green-800 truncate">
+                              {doc.file_name || `Документ ${index + 1}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            handleFileUpload(file, docType.id)
+                          }
+                        }}
+                        disabled={uploading === docType.id}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                        id={`file-${docType.id}`}
+                      />
+                      <label
+                        htmlFor={`file-${docType.id}`}
+                        className={`
+                          flex items-center justify-center gap-3 p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all
+                          ${
+                            uploading === docType.id
+                              ? "border-muted-foreground bg-muted cursor-not-allowed"
+                              : "border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/10"
+                          }
+                        `}
+                      >
+                        {uploading === docType.id ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground font-medium">Загружается...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-5 w-5 text-primary" />
+                            <span className="text-primary font-medium">
+                              {isDocumentUploaded(docType.id)
+                                ? "Добавить еще файл"
+                                : "Выберите файл или перетащите сюда"}
+                            </span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                      Поддерживаемые форматы: PDF, DOC, DOCX • Максимальный размер: 10MB
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {checkDocumentsComplete() && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 shadow-sm">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-800">Все документы загружены!</h3>
+                      <p className="text-sm text-green-600">Подтвердите ответственность для продолжения</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/70 rounded-lg p-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="responsibility"
+                        checked={responsibilityAccepted}
+                        onCheckedChange={(checked) => setResponsibilityAccepted(checked === true)}
+                        className="mt-1 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                      />
+                      <label htmlFor="responsibility" className="text-sm text-gray-700 leading-relaxed cursor-pointer">
+                        Я подтверждаю, что все загруженные документы являются подлинными и актуальными. Я беру на себя
+                        полную ответственность за достоверность предоставленной информации и понимаю, что предоставление
+                        ложных сведений может повлечь за собой правовые последствия.
+                      </label>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleParticipateClick}
+                    disabled={!responsibilityAccepted}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 text-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Участвовать в аукционе
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
+
+        <div className="flex justify-end gap-3 pt-6 border-t border-border">
+          <Button variant="outline" onClick={onClose} className="px-6 bg-transparent">
+            <X className="h-4 w-4 mr-2" />
+            Закрыть
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -152,82 +152,72 @@ export default function Home() {
 
     try {
       const token = tokenManager.getToken()
-      if (!token) return false
+      if (!token) {
+        console.log("[v0] Токен не найден для проверки документов")
+        return false
+      }
 
       console.log("[v0] Проверяем документы пользователя для аукциона:", auctionId)
       console.log("[v0] ОТЛАДКА URL - API_BASE_URL для документов:", API_BASE_URL)
-      console.log("[v0] ОТЛАДКА URL - URL типов документов:", `${API_BASE_URL}/api/file/type/list`)
-      console.log("[v0] ОТЛАДКА URL - URL списка документов:", `${API_BASE_URL}/api/file/my-list/`)
+      console.log("[v0] ОТЛАДКА URL - URL списка документов:", `${API_BASE_URL}/file/my-list/`)
 
-      const typesResponse = await fetch(`${API_BASE_URL}/api/file/type/list`, {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+      const docsResponse = await fetch(`${API_BASE_URL}/file/my-list/`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        signal: controller.signal,
       })
 
-      const docsResponse = await fetch(`${API_BASE_URL}/api/file/my-list/`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      console.log("[v0] Статус ответа типов документов:", typesResponse.status)
+      clearTimeout(timeoutId)
       console.log("[v0] Статус ответа списка документов:", docsResponse.status)
 
-      if (typesResponse.ok && docsResponse.ok) {
-        const types = await typesResponse.json()
-        const documents = await docsResponse.json()
+      if (!docsResponse.ok) {
+        const errorText = await docsResponse.text()
+        console.error("[v0] Ошибка API при получении документов:", {
+          status: docsResponse.status,
+          statusText: docsResponse.statusText,
+          error: errorText,
+        })
 
-        console.log("[v0] Получены типы документов:", JSON.stringify(types, null, 2))
-        console.log("[v0] Получены документы пользователя:", JSON.stringify(documents, null, 2))
-
-        const requiredTypes = types || []
-
-        // Извлекаем файлы из структуры аукционов
-        const allFiles = documents.flatMap((auction: any) => auction.files || [])
-
-        // Фильтруем файлы для текущего аукциона
-        const auctionFiles = allFiles.filter((file: any) => file.auction_id === auctionId)
-
-        // Получаем типы загруженных документов
-        const uploadedFileTypes = auctionFiles.map((file: any) => file.file_type)
-
-        // Проверяем, что все обязательные типы загружены
-        const allRequiredUploaded =
-          requiredTypes.length > 0 && requiredTypes.every((type: any) => uploadedFileTypes.includes(type.title))
-
-        console.log("[v0] Проверка документов для аукциона:", auctionId)
-        console.log(
-          "[v0] Обязательные типы:",
-          requiredTypes.length,
-          requiredTypes.map((t: any) => t.title),
-        )
-        console.log("[v0] Загруженные типы для аукциона:", uploadedFileTypes)
-        console.log("[v0] Все обязательные документы загружены:", allRequiredUploaded)
-
-        setDocumentsComplete((prev) => ({ ...prev, [auctionId]: allRequiredUploaded }))
-        return allRequiredUploaded
-      } else {
-        console.error("[v0] Ошибка при получении данных о документах")
-        console.error("[v0] Типы документов - статус:", typesResponse.status)
-        console.error("[v0] Список документов - статус:", docsResponse.status)
-
-        if (!typesResponse.ok) {
-          const errorText = await typesResponse.text()
-          console.error("[v0] Ошибка типов документов:", errorText)
-        }
-        if (!docsResponse.ok) {
-          const errorText = await docsResponse.text()
-          console.error("[v0] Ошибка списка документов:", errorText)
-        }
+        return false
       }
+
+      const documents = await docsResponse.json()
+      console.log("[v0] Получены документы пользователя:", JSON.stringify(documents, null, 2))
+
+      // Извлекаем файлы из структуры аукционов
+      const allFiles = documents.flatMap((auction: any) => auction.files || [])
+
+      // Фильтруем файлы для текущего аукциона
+      const auctionFiles = allFiles.filter((file: any) => file.auction_id === auctionId)
+
+      const hasDocuments = auctionFiles.length > 0
+
+      console.log("[v0] Проверка документов для аукциона:", auctionId)
+      console.log("[v0] Файлы для аукциона:", auctionFiles.length)
+      console.log("[v0] Документы загружены:", hasDocuments)
+
+      setDocumentsComplete((prev) => ({ ...prev, [auctionId]: hasDocuments }))
+      return hasDocuments
     } catch (error) {
       console.error("[v0] Исключение при проверке документов:", error)
-    }
 
-    return false
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          console.error("[v0] Таймаут при получении документов")
+        } else if (error.message.includes("Failed to fetch")) {
+          console.error("[v0] Сетевая ошибка при получении документов")
+        } else {
+          console.error("[v0] Неизвестная ошибка при получении документов:", error.message)
+        }
+      }
+
+      return false
+    }
   }
 
   const handleParticipateClick = async (auctionId: string) => {
@@ -272,12 +262,14 @@ export default function Home() {
             {isConnected ? (
               <>
                 <Wifi className="h-5 w-5 text-green-500" />
-                <span className="text-sm text-green-600">Подключено к серверу</span>
+                <span className="text-sm font-medium" style={{ color: "#166534" }}>
+                  Подключено к серверу
+                </span>
               </>
             ) : (
               <>
                 <WifiOff className="h-5 w-5 text-red-500" />
-                <span className="text-sm text-red-600">
+                <span className="text-sm font-medium" style={{ color: "#991b1b" }}>
                   {user ? "Подключение к серверу..." : "Войдите для подключения к серверу"}
                 </span>
               </>
