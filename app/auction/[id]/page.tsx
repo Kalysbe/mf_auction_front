@@ -27,8 +27,10 @@ import {
   tokenManager,
 } from "@/lib/api"
 import ProtectedRoute from "@/components/protected-route"
-import { Clock, Package, TrendingUp, Plus, User, FileText, XCircle, AlertCircle } from "lucide-react" // Добавлен XCircle и AlertCircle
+import { Clock, Package, TrendingUp, Plus, User, FileText, XCircle, AlertCircle } from "lucide-react"
 import AuctionReportDialog from "@/components/auction-report-dialog"
+
+const API_BASE_URL = "https://mfauction.adb-solution.com/api"
 
 // Format number with currency
 function formatAmount(amount: number, currency = "KGS") {
@@ -103,7 +105,7 @@ const fetchAuctionReport = async (auctionId: string) => {
       throw new Error("No authentication token")
     }
 
-    const response = await fetch(`https://mfauction.adb-solution.com/api/auction/${auctionId}`, {
+    const response = await fetch(`https://mfa.kse.kg/api/auction/${auctionId}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -136,13 +138,13 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
     onlineUsers,
     joinAuction,
     createLot,
-    createOffer,
-    closeAuction, // Используем функцию closeAuction
+    closeAuction,
     getAuctionLots,
     getOnlineUsers,
     isConnected,
-    cancelOffer, // Добавлена функция отмены заявок
-    closeLot, // Добавлена функция закрытия лота
+    cancelOffer,
+    closeLot,
+    createOffer,
   } = useWebSocket()
 
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null)
@@ -152,15 +154,131 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   const [hasJoined, setHasJoined] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [showReportDialog, setShowReportDialog] = useState(false)
-  const [isClosingAuction, setIsClosingAuction] = useState(false) // Состояние для кнопки закрытия аукциона
-
-  // Create lot form state
+  const [isClosingAuction, setIsClosingAuction] = useState(false)
+  const [userDocumentsVerified, setUserDocumentsVerified] = useState<boolean>(true) // Updated to true
   const [showCreateLot, setShowCreateLot] = useState(false)
   const [lotAsset, setLotAsset] = useState("")
   const [lotVolume, setLotVolume] = useState("")
   const [lotPercent, setLotPercent] = useState("")
-  const [term_month, setLotTermMonth] = useState("") // Добавлено состояние для срока размещения депозита
-  const [isCreatingLot, setIsCreatingLot] = useState(false)
+  const [term_month, setLotTermMonth] = useState("")
+  const [canGenerateReport, setCanGenerateReport] = useState(false)
+  const [canForceCloseAuction, setCanForceCloseAuction] = useState(false)
+  const [timeRemaining, setTimeRemaining] = useState({ text: "", isExpired: false, className: "" })
+  const [auctionTitle, setAuctionTitle] = useState("")
+  const [auctionDescription, setAuctionDescription] = useState("")
+
+  const auction = auctions.find((a) => a.id === params.id) || currentAuction
+  const selectedLot = lots.find((lot) => lot.id === selectedLotId)
+  const canEditOfferVolume = user?.role === "admin" || user?.role === "initiator"
+  const canViewAuction = auction?.status === "open" || auction?.status === "closed" || auction?.status === "active"
+  const normalizedStatus = normalizeAuctionStatus(auction?.status)
+  const statusText = getStatusDisplayText(auction?.status)
+  const badgeVariant = getStatusBadgeVariant(auction?.status)
+
+  const checkUserDocumentsForAuction = useCallback(async () => {
+    if (!user || !params.id) return false
+
+    if (user.role === "admin" || user.role === "initiator") {
+      setUserDocumentsVerified(true)
+      return true
+    }
+
+    try {
+      const token = tokenManager.getToken()
+      if (!token) return false
+
+      const response = await fetch(`${API_BASE_URL}/file/auction/${params.id}/files/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (response.ok) {
+        const documents = await response.json()
+        const hasDocuments = documents && documents.length > 0
+        setUserDocumentsVerified(hasDocuments)
+        return hasDocuments
+      }
+    } catch (error) {
+      console.error("[v0] Ошибка проверки документов:", error)
+    }
+
+    setUserDocumentsVerified(false)
+    return false
+  }, [user, params.id])
+
+  const handleJoinAuction = useCallback(() => {
+    if (isConnected && params.id && !hasJoined) {
+      joinAuction(params.id)
+      setHasJoined(true)
+
+      if (user?.role === "admin" || user?.role === "initiator" || (auction && auction.user_id === user?.id)) {
+        getOnlineUsers(params.id)
+      }
+    }
+  }, [isConnected, params.id, hasJoined, joinAuction, getOnlineUsers, user?.role, user?.id, auction?.user_id, auction])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    handleJoinAuction()
+  }, [handleJoinAuction])
+
+  useEffect(() => {
+    setHasJoined(false)
+    setSelectedLotId(null)
+  }, [params.id])
+
+  useEffect(() => {
+    checkUserDocumentsForAuction()
+  }, [checkUserDocumentsForAuction])
+
+  useEffect(() => {
+    if (auction) {
+      setCanGenerateReport(user?.role === "admin" || user?.role === "initiator")
+      setCanForceCloseAuction((user?.role === "admin" || user?.role === "initiator") && normalizedStatus === "active")
+      setTimeRemaining(formatTimeRemaining(auction.end_time))
+      setAuctionTitle(auction.title || `${auction.type === "sell" ? "Продажа" : "Покупка"} ${auction.asset}`)
+      setAuctionDescription(`${auction.asset} - ${auction.currency}`)
+    }
+  }, [auction, user?.role, normalizedStatus])
+
+  if (!auction) {
+    return (
+      <ProtectedRoute>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold mb-4">Аукцион не найден</h2>
+          <p className="text-gray-600 mb-4">
+            {isConnected ? "Аукцион с таким ID не существует или еще загружается" : "Подключение к серверу..."}
+          </p>
+          <Button asChild className="bg-primary hover:bg-primary-600">
+            <Link href="/">Вернуться к списку аукционов</Link>
+          </Button>
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  if (!canViewAuction) {
+    return (
+      <ProtectedRoute>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold mb-4">Аукцион недоступен</h2>
+          <p className="text-gray-600 mb-4">Этот аукцион недоступен для просмотра</p>
+          <Button asChild className="bg-primary hover:bg-primary-600">
+            <Link href="/">Вернуться к списку аукционов</Link>
+          </Button>
+        </div>
+      </ProtectedRoute>
+    )
+  }
 
   const formatVolumeInput = (value: string) => {
     // Удаляем все пробелы и нечисловые символы кроме точки
@@ -181,50 +299,6 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
   const getNumericValue = (formattedValue: string) => {
     return formattedValue.replace(/\s/g, "")
   }
-
-  const auction = auctions.find((a) => a.id === params.id) || currentAuction
-  const selectedLot = lots.find((lot) => lot.id === selectedLotId)
-
-  // Determine if the user can edit the offer volume
-  const canEditOfferVolume = user?.role === "admin" || user?.role === "initiator"
-
-  const canViewAuction = auction?.status === "open" || auction?.status === "closed" || auction?.status === "active"
-
-  // Update current time every second for countdown
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [])
-
-  // Simplified join auction function - just join, lots will be loaded automatically by useWebSocket
-  const handleJoinAuction = useCallback(() => {
-    if (isConnected && params.id && !hasJoined) {
-      joinAuction(params.id)
-      setHasJoined(true)
-
-      // Get online users if admin, creator, or initiator
-      if (user?.role === "admin" || user?.role === "initiator" || (auction && auction.user_id === user?.id)) {
-        getOnlineUsers(params.id)
-      }
-    }
-  }, [isConnected, params.id, hasJoined, joinAuction, getOnlineUsers, user?.role, user?.id, auction?.user_id, auction])
-
-  // Join auction when connected
-  useEffect(() => {
-    handleJoinAuction()
-  }, [handleJoinAuction])
-
-  // Reset hasJoined when auction ID changes
-  useEffect(() => {
-    setHasJoined(false)
-    setSelectedLotId(null)
-  }, [params.id])
-
-  // Log selectedLot.offers changes for debugging
-  useEffect(() => {}, [selectedLot])
 
   const handleCreateLot = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -261,7 +335,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
       return
     }
 
-    setIsCreatingLot(true)
+    setIsSubmitting(true)
     try {
       const lotData = {
         auction_id: auction.id,
@@ -291,7 +365,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
         variant: "destructive",
       })
     } finally {
-      setIsCreatingLot(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -403,6 +477,11 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
 
       closeLot(lotId, auction.id)
 
+      setTimeout(() => {
+        console.log("[v0] Refreshing auction data after lot closure")
+        getAuctionLots(auction.id)
+      }, 1000)
+
       toast({
         title: "Лот закрыт",
         description: "Лот успешно закрыт",
@@ -456,7 +535,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
     }
 
     // Админ может отменить любую заявку
-    if (user?.role === "admin") {
+    if (user?.role === "admin" || user?.role === "initiator") {
       console.log("[v0] Admin can cancel any offer")
       return true
     }
@@ -479,55 +558,11 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
     return canClose
   }
 
-  // Normalize auction status with safety check
-  const normalizedStatus = normalizeAuctionStatus(auction?.status)
-  const statusText = getStatusDisplayText(auction?.status)
-  const badgeVariant = getStatusBadgeVariant(auction?.status)
-
-  // Also add safety check for auction object itself
-  if (!auction) {
-    return (
-      <ProtectedRoute>
-        <div className="text-center py-12">
-          <h2 className="text-2xl font-bold mb-4">Аукцион не найден</h2>
-          <p className="text-gray-600 mb-4">
-            {isConnected ? "Аукцион с таким ID не существует или еще загружается" : "Подключение к серверу..."}
-          </p>
-          <Button asChild className="bg-primary hover:bg-primary-600">
-            <Link href="/">Вернуться к списку аукционов</Link>
-          </Button>
-        </div>
-      </ProtectedRoute>
-    )
-  }
-
-  if (!canViewAuction) {
-    return (
-      <ProtectedRoute>
-        <div className="text-center py-12">
-          <h2 className="text-2xl font-bold mb-4">Аукцион недоступен</h2>
-          <p className="text-gray-600 mb-4">Этот аукцион недоступен для просмотра</p>
-          <Button asChild className="bg-primary hover:bg-primary-600">
-            <Link href="/">Вернуться к списку аукционов</Link>
-          </Button>
-        </div>
-      </ProtectedRoute>
-    )
-  }
-
   const canCreateLot = user?.role === "admin" || user?.role === "initiator"
-  const canMakeOffer = normalizedStatus === "active" && user?.role !== "admin" && user?.role !== "initiator"
+  const canMakeOffer =
+    normalizedStatus === "active" && user?.role !== "admin" && user?.role !== "initiator" && userDocumentsVerified
   const canViewParticipants =
     user?.role === "admin" || user?.role === "initiator" || (auction && auction.user_id === user?.id)
-  const canGenerateReport = user?.role === "admin" || user?.role === "initiator" // Ведомость доступна всегда для админа/инициатора
-  const canForceCloseAuction = (user?.role === "admin" || user?.role === "initiator") && normalizedStatus === "active"
-
-  // Get time remaining info
-  const timeRemaining = formatTimeRemaining(auction.end_time)
-
-  // Get auction title and description
-  const auctionTitle = auction.title || `${auction.type === "sell" ? "Продажа" : "Покупка"} ${auction.asset}`
-  const auctionDescription = `${auction.asset} - ${auction.currency}`
 
   return (
     <ProtectedRoute>
@@ -726,18 +761,6 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
                   Сформировать ведомость
                 </Button>
               )}
-              {canForceCloseAuction && (
-                <Button
-                  onClick={handleCloseAuction}
-                  disabled={isClosingAuction || !isConnected}
-                  variant="destructive"
-                  size="sm"
-                  className="bg-red-500 hover:bg-red-600"
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  {isClosingAuction ? "Завершение..." : "Закрыть аукцион"}
-                </Button>
-              )}
             </div>
           </CardHeader>
           <CardContent className="pt-6">
@@ -829,10 +852,10 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
                 <CardFooter className="bg-primary/5 border-t border-primary/10">
                   <Button
                     type="submit"
-                    disabled={isCreatingLot || !isConnected}
+                    disabled={isSubmitting || !isConnected}
                     className="bg-primary hover:bg-primary-600"
                   >
-                    {isCreatingLot ? "Создание..." : "Создать лот"}
+                    {isSubmitting ? "Создание..." : "Создать лот"}
                   </Button>
                 </CardFooter>
               </form>
@@ -1012,7 +1035,7 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
               <Table>
                 <TableHeader className="bg-gray-50">
                   <TableRow>
-                    {user?.role === "admin" && <TableHead>Участник</TableHead>}
+                    {user?.role === "admin" || (user?.role === "initiator" && <TableHead>Участник</TableHead>)}
                     <TableHead>Процентная ставка</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Время</TableHead>
@@ -1028,14 +1051,15 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
                         key={offer.id}
                         className={index === 0 && (selectedLot.offers?.length || 0) > 1 ? "bg-green-50" : ""}
                       >
-                        {user?.role === "admin" && (
-                          <TableCell>
-                            {offer.user?.name || offer.user?.email || `Пользователь ${offer.user_id}`}
-                            {index === 0 && (selectedLot.offers?.length || 0) > 1 && (
-                              <Badge className="ml-2 bg-green-500">Лидер</Badge>
-                            )}
-                          </TableCell>
-                        )}
+                        {user?.role === "admin" ||
+                          (user?.role === "initiator" && (
+                            <TableCell>
+                              {offer.user?.name || offer.user?.email || `Пользователь ${offer.user_id}`}
+                              {index === 0 && (selectedLot.offers?.length || 0) > 1 && (
+                                <Badge className="ml-2 bg-green-500">Лидер</Badge>
+                              )}
+                            </TableCell>
+                          ))}
                         <TableCell className="font-medium">{formatPercent(offer.percent)}</TableCell>
                         <TableCell>
                           <Badge
@@ -1080,7 +1104,10 @@ export default function AuctionPage({ params }: { params: { id: string } }) {
                     ))}
                   {(!selectedLot.offers || selectedLot.offers.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={user?.role === "admin" ? 5 : 4} className="text-center py-8 text-gray-500">
+                      <TableCell
+                        colSpan={user?.role === "admin" || user?.role === "initiator" ? 5 : 4}
+                        className="text-center py-8 text-gray-500"
+                      >
                         По этому лоту пока нет предложений
                       </TableCell>
                     </TableRow>

@@ -66,7 +66,7 @@ export default function DocumentsPage() {
       formData.append("file", file)
       formData.append("file_type_id", fileTypeId)
 
-      const response = await fetch(`${API_BASE_URL}/file/upload`, {
+      const response = await fetch(`${API_BASE_URL}/file/create`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,

@@ -67,15 +67,7 @@ export default function AuctionReportDialog({ isOpen, onClose, auction, lots }: 
         </DialogHeader>
 
         <div className="space-y-8 print:text-black">
-          <div className="text-center text-sm text-gray-600 print:text-black">
-            <p>Приложение 2</p>
-            <p>к Генеральному соглашению</p>
-            <p>об организации аукциона на размещение средств из счета смягчения</p>
-            <p>в депозиты коммерческих банков на торговой площадке</p>
-            <p>ЗАО «Кыргызская фондовая биржа»</p>
-            <p>от “_____” ________20__г. No</p>
-          </div>
-
+        
           <h2 className="text-xl font-semibold mb-4">Общая информация по аукциону</h2>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -98,6 +90,7 @@ export default function AuctionReportDialog({ isOpen, onClose, auction, lots }: 
               <TableRow>
                 <TableHead>Коммерческий банк</TableHead>
                 <TableHead>Регистрационный номер лота</TableHead>
+                <TableHead>Объем лота ({auction.currency})</TableHead>
                 <TableHead>Сумма депозита ({auction.currency})</TableHead>
                 <TableHead>Срок размещения депозита (месяц)</TableHead>
                 <TableHead>Стартовый размер процентной ставки по депозиту (% годовых)</TableHead>
@@ -106,21 +99,25 @@ export default function AuctionReportDialog({ isOpen, onClose, auction, lots }: 
             </TableHeader>
             <TableBody>
               {sortedAllOffers.length > 0 ? (
-                sortedAllOffers.map((offer) => (
-                  <TableRow key={offer.id}>
-                    <TableCell>
-                      {offer.user?.name || offer.user?.email || `Пользователь ${offer.user_id.substring(0, 8)}...`}
-                    </TableCell>
-                    <TableCell>{offer.lotAsset}</TableCell>
-                    <TableCell>{formatCurrency(offer.volume, auction.currency)}</TableCell>
-                    <TableCell>{auction.term || "Не указан"}</TableCell>
-                    <TableCell>{formatPercent(offer.lotPercent)}</TableCell>
-                    <TableCell>{formatPercent(offer.percent)}</TableCell>
-                  </TableRow>
-                ))
+                sortedAllOffers.map((offer) => {
+                  const correspondingLot = lots.find((lot) => lot.asset === offer.lotAsset)
+                  return (
+                    <TableRow key={offer.id}>
+                      <TableCell>
+                        {offer.user?.name || offer.user?.email || `Пользователь ${offer.user_id.substring(0, 8)}...`}
+                      </TableCell>
+                      <TableCell>{offer.lotAsset}</TableCell>
+                      <TableCell>{formatCurrency(correspondingLot?.volume || 0, auction.currency)}</TableCell>
+                      <TableCell>{formatCurrency(offer.volume, auction.currency)}</TableCell>
+                      <TableCell>{auction.term || "Не указан"}</TableCell>
+                      <TableCell>{formatPercent(offer.lotPercent)}</TableCell>
+                      <TableCell>{formatPercent(offer.percent)}</TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500 py-4">
+                  <TableCell colSpan={7} className="text-center text-gray-500 py-4">
                     Нет поступивших заявок.
                   </TableCell>
                 </TableRow>
@@ -134,6 +131,7 @@ export default function AuctionReportDialog({ isOpen, onClose, auction, lots }: 
               <TableRow>
                 <TableHead>Коммерческий банк</TableHead>
                 <TableHead>Регистрационный номер лота</TableHead>
+                <TableHead>Объем лота ({auction.currency})</TableHead>
                 <TableHead>Сумма депозита ({auction.currency})</TableHead>
                 <TableHead>Срок размещения депозита (месяц)</TableHead>
                 <TableHead>Стартовый размер процентной ставки по депозиту (% годовых)</TableHead>
@@ -142,27 +140,31 @@ export default function AuctionReportDialog({ isOpen, onClose, auction, lots }: 
             </TableHeader>
             <TableBody>
               {sortedAcceptedOffers.length > 0 ? (
-                sortedAcceptedOffers.map((offer) => (
-                  <TableRow key={offer.id}>
-                    <TableCell>
-                      {offer.user?.name || offer.user?.email || `Пользователь ${offer.user_id.substring(0, 8)}...`}
-                    </TableCell>
-                    <TableCell>{offer.lotAsset}</TableCell>
-                    <TableCell>{formatCurrency(offer.volume, auction.currency)}</TableCell>
-                    <TableCell>{auction.term || "Не указан"}</TableCell>
-                    <TableCell>{formatPercent(offer.lotPercent)}</TableCell>
-                    <TableCell>{formatPercent(offer.percent)}</TableCell>
-                  </TableRow>
-                ))
+                sortedAcceptedOffers.map((offer) => {
+                  const correspondingLot = lots.find((lot) => lot.asset === offer.lotAsset)
+                  return (
+                    <TableRow key={offer.id}>
+                      <TableCell>
+                        {offer.user?.name || offer.user?.email || `Пользователь ${offer.user_id.substring(0, 8)}...`}
+                      </TableCell>
+                      <TableCell>{offer.lotAsset}</TableCell>
+                      <TableCell>{formatCurrency(correspondingLot?.volume || 0, auction.currency)}</TableCell>
+                      <TableCell>{formatCurrency(offer.volume, auction.currency)}</TableCell>
+                      <TableCell>{auction.term || "Не указан"}</TableCell>
+                      <TableCell>{formatPercent(offer.lotPercent)}</TableCell>
+                      <TableCell>{formatPercent(offer.percent)}</TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500 py-4">
+                  <TableCell colSpan={7} className="text-center text-gray-500 py-4">
                     Нет принятых заявок.
                   </TableCell>
                 </TableRow>
               )}
               <TableRow className="font-bold bg-gray-100">
-                <TableCell colSpan={2}>Всего:</TableCell>
+                <TableCell colSpan={3}>Всего:</TableCell>
                 <TableCell>{formatCurrency(totalAcceptedVolume, auction.currency)}</TableCell>
                 <TableCell colSpan={3}></TableCell>
               </TableRow>

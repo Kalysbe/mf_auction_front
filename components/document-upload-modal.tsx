@@ -43,7 +43,10 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
 
   const fetchDocumentTypes = async () => {
     try {
-      console.log("[v0] Загружаем типы документов с API...")
+      console.log("[v0] 🔄 Запрос типов документов...")
+      console.log("[v0] 📡 API URL:", `${API_BASE_URL}/file/type/list`)
+      console.log("[v0] 🔑 Token:", tokenManager.getToken() ? "Присутствует" : "Отсутствует")
+
       const response = await fetch(`${API_BASE_URL}/file/type/list`, {
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
@@ -51,9 +54,15 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
         },
       })
 
+      console.log("[v0] 📊 Статус ответа типов документов:", response.status)
+      console.log("[v0] 📋 Headers ответа:", Object.fromEntries(response.headers.entries()))
+
       if (response.ok) {
         const types = await response.json()
-        console.log("[v0] Получены типы документов:", types)
+        console.log("[v0] ✅ Получены типы документов с бэкенда:")
+        console.log("[v0] 📄 Количество типов:", types?.length || 0)
+        console.log("[v0] 📝 Структура первого типа:", types?.[0])
+        console.log("[v0] 🗂️ Все типы документов:", types)
 
         const mappedTypes = types.map((type: any) => ({
           id: type.id,
@@ -61,29 +70,40 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
           required: true,
         }))
 
-        console.log("[v0] Обработанные типы документов:", mappedTypes)
+        console.log("[v0] 🔄 Обработанные типы документов для UI:", mappedTypes)
         setDocumentTypes(mappedTypes || [])
       } else {
-        console.error("[v0] Ошибка при получении типов документов:", response.status)
-        setDocumentTypes([
+        console.error("[v0] ❌ Ошибка при получении типов документов:", response.status)
+        const errorText = await response.text()
+        console.error("[v0] 📄 Текст ошибки:", errorText)
+
+        const fallbackTypes = [
           { id: "passport", name: "Паспорт", required: true },
           { id: "income_certificate", name: "Справка о доходах", required: true },
           { id: "bank_statement", name: "Банковская выписка", required: true },
-        ])
+        ]
+        console.log("[v0] 🔄 Используем fallback типы документов:", fallbackTypes)
+        setDocumentTypes(fallbackTypes)
       }
     } catch (error) {
-      console.error("[v0] Исключение при получении типов документов:", error)
-      setDocumentTypes([
+      console.error("[v0] 💥 Исключение при получении типов документов:", error)
+      const fallbackTypes = [
         { id: "passport", name: "Паспорт", required: true },
         { id: "income_certificate", name: "Справка о доходах", required: true },
         { id: "bank_statement", name: "Банковская выписка", required: true },
-      ])
+      ]
+      console.log("[v0] 🔄 Используем fallback типы документов после ошибки:", fallbackTypes)
+      setDocumentTypes(fallbackTypes)
     }
   }
 
   const fetchUserDocuments = async () => {
     try {
-      console.log("[v0] Fetching user documents for auction:", auctionId)
+      console.log("[v0] 🔄 Запрос документов пользователя для аукциона...")
+      console.log("[v0] 🎯 Auction ID:", auctionId)
+      console.log("[v0] 📡 API URL:", `${API_BASE_URL}/file/auction/${auctionId}/files/`)
+      console.log("[v0] 🔑 Token:", tokenManager.getToken() ? "Присутствует" : "Отсутствует")
+
       const response = await fetch(`${API_BASE_URL}/file/auction/${auctionId}/files/`, {
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
@@ -91,28 +111,70 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
         },
       })
 
-      if (response.ok) {
-        const documents = await response.json()
-        console.log("[v0] Получены документы пользователя для аукциона:", documents)
-        setUploadedDocuments(documents || [])
+      console.log("[v0] 📊 Статус ответа документов пользователя:", response.status)
+      console.log("[v0] 📋 Headers ответа:", Object.fromEntries(response.headers.entries()))
 
-        const grouped = (documents || []).reduce((acc: Record<string, UploadedDocument[]>, doc: UploadedDocument) => {
-          if (!acc[doc.file_type]) {
-            acc[doc.file_type] = []
-          }
-          acc[doc.file_type].push(doc)
-          return acc
-        }, {})
+      if (response.ok) {
+        const apiResponse = await response.json()
+        console.log("[v0] ✅ Получен ответ API с бэкенда:")
+        console.log("[v0] 📄 Структура ответа API:", apiResponse)
+        console.log("[v0] 📊 Количество аукционов в ответе:", apiResponse?.length || 0)
+
+        const allDocuments: UploadedDocument[] = []
+        const grouped: Record<string, UploadedDocument[]> = {}
+
+        if (Array.isArray(apiResponse) && apiResponse.length > 0) {
+          // Проходим по каждому аукциону в ответе
+          apiResponse.forEach((auction: any) => {
+            console.log("[v0] 🎯 Обрабатываем аукцион:", auction.id, auction.asset)
+            console.log("[v0] 📁 Группы файлов в аукционе:", auction.files?.length || 0)
+
+            if (auction.files && Array.isArray(auction.files)) {
+              // Проходим по каждой группе файлов (по типам)
+              auction.files.forEach((fileGroup: any) => {
+                console.log("[v0] 📂 Обрабатываем группу файлов типа:", fileGroup.file_type)
+                console.log("[v0] 📄 Количество файлов в группе:", fileGroup.files?.length || 0)
+
+                if (fileGroup.files && Array.isArray(fileGroup.files)) {
+                  // Добавляем все файлы из группы в общий массив
+                  fileGroup.files.forEach((file: UploadedDocument) => {
+                    console.log("[v0] 📎 Добавляем файл:", file.id, file.file_type)
+                    allDocuments.push(file)
+
+                    // Группируем файлы по типам для отображения
+                    if (!grouped[file.file_type]) {
+                      grouped[file.file_type] = []
+                    }
+                    grouped[file.file_type].push(file)
+                  })
+                }
+              })
+            }
+          })
+        }
+
+        console.log("[v0] 📋 Все извлеченные документы:", allDocuments)
+        console.log("[v0] 📊 Количество всех документов:", allDocuments.length)
+        console.log("[v0] 🗂️ Документы сгруппированные по типам:", grouped)
+
+        setUploadedDocuments(allDocuments)
         setDocumentsByType(grouped)
       } else {
-        console.error("[v0] Ошибка при получении документов пользователя:", response.status)
+        console.error("[v0] ❌ Ошибка при получении документов пользователя:", response.status)
+        const errorText = await response.text()
+        console.error("[v0] 📄 Текст ошибки:", errorText)
+
+        setUploadedDocuments([])
+        setDocumentsByType({})
       }
     } catch (error) {
-      console.error("[v0] Исключение при получении документов пользователя:", error)
+      console.error("[v0] 💥 Исключение при получении документов пользователя:", error)
+      setUploadedDocuments([])
+      setDocumentsByType({})
     }
   }
 
-  const handleFileUpload = async (file: File, documentType: string) => {
+  const handleFileUpload = async (file: File, documentTypeId: string) => {
     if (!file) return
 
     const maxSize = 10 * 1024 * 1024 // 10MB в байтах
@@ -123,7 +185,6 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
       return
     }
 
-    // Проверяем формат файла
     const allowedTypes = [
       "application/pdf",
       "application/msword",
@@ -135,21 +196,34 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
       return
     }
 
-    setUploading(documentType)
+    const documentType = documentTypes.find((type) => type.id === documentTypeId)
+    const documentTypeName = documentType ? documentType.name : documentTypeId
+
+    setUploading(documentTypeId)
     const formData = new FormData()
     formData.append("file", file)
-    formData.append("file_type", documentType)
+    formData.append("file_type", documentTypeName) // Отправляем название типа документа вместо ID
     formData.append("auction_id", auctionId)
 
     try {
-      console.log("[v0] Загружаем файл:", {
-        documentType,
-        fileName: file.name,
-        fileSize: `${(file.size / 1024 / 1024).toFixed(1)}MB`,
+      console.log("[v0] 📤 Начинаем загрузку файла...")
+      console.log("[v0] 📄 Детали файла:", {
+        name: file.name,
+        type: file.type,
+        size: `${(file.size / 1024 / 1024).toFixed(1)}MB`,
+        documentTypeId,
+        documentTypeName, // Логируем название типа документа
         auctionId,
       })
+      console.log("[v0] 📡 API URL для загрузки:", `${API_BASE_URL}/file/create`)
+      console.log("[v0] 🔑 Token:", tokenManager.getToken() ? "Присутствует" : "Отсутствует")
 
-      const response = await fetch(`${API_BASE_URL}/api/file/upload`, {
+      console.log("[v0] 📦 Отправляемые данные:")
+      console.log("[v0] - file_type:", documentTypeName)
+      console.log("[v0] - auction_id:", auctionId)
+      console.log("[v0] - file:", file.name)
+
+      const response = await fetch(`${API_BASE_URL}/file/create`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenManager.getToken()}`,
@@ -157,20 +231,29 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
         body: formData,
       })
 
+      console.log("[v0] 📊 Статус ответа загрузки файла:", response.status)
+      console.log("[v0] 📋 Headers ответа:", Object.fromEntries(response.headers.entries()))
+
       if (response.ok) {
         const result = await response.json()
-        console.log("[v0] Файл успешно загружен:", result)
+        console.log("[v0] ✅ Файл успешно загружен!")
+        console.log("[v0] 📄 Результат загрузки:", result)
+
+        console.log("[v0] 🔄 Перезагружаем список документов после успешной загрузки...")
         await fetchUserDocuments()
       } else {
+        const errorText = await response.text()
+        console.error("[v0] ❌ Ошибка загрузки файла:", response.status)
+        console.error("[v0] 📄 Текст ошибки:", errorText)
+
         if (response.status === 413) {
           alert("Файл слишком большой для загрузки на сервер. Пожалуйста, уменьшите размер файла до 10MB или меньше.")
         } else {
-          console.error("[v0] Ошибка загрузки файла:", response.status)
           alert(`Ошибка при загрузке файла (код: ${response.status}). Попробуйте еще раз.`)
         }
       }
     } catch (error) {
-      console.error("[v0] Исключение при загрузке файла:", error)
+      console.error("[v0] 💥 Исключение при загрузке файла:", error)
       alert("Ошибка сети при загрузке файла. Проверьте подключение к интернету.")
     } finally {
       setUploading(null)
@@ -178,25 +261,30 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
   }
 
   const isDocumentUploaded = (documentType: string) => {
-    return documentsByType[documentType] && documentsByType[documentType].length > 0
+    const documentTypeName = documentTypes.find((type) => type.id === documentType)?.name || documentType
+    return documentsByType[documentTypeName] && documentsByType[documentTypeName].length > 0
   }
 
   const checkDocumentsComplete = () => {
-    const requiredTypes = documentTypes.filter((type) => type.required).map((type) => type.id)
-    const uploadedTypes = Object.keys(documentsByType).filter((type) => documentsByType[type].length > 0)
-    const allRequiredUploaded = requiredTypes.every((type) => uploadedTypes.includes(type))
+    const requiredTypeNames = documentTypes.filter((type) => type.required).map((type) => type.name)
+    const uploadedTypeNames = Object.keys(documentsByType).filter((typeName) => documentsByType[typeName].length > 0)
+    const allRequiredUploaded = requiredTypeNames.every((typeName) => uploadedTypeNames.includes(typeName))
 
-    console.log("[v0] Проверка документов:")
-    console.log("[v0] Обязательные типы:", requiredTypes)
-    console.log("[v0] Загруженные типы:", uploadedTypes)
-    console.log("[v0] Все обязательные загружены:", allRequiredUploaded)
-    console.log("[v0] Ответственность принята:", responsibilityAccepted)
+    console.log("[v0] 🔍 Проверка завершенности документов:")
+    console.log("[v0] 📋 Все типы документов:", documentTypes)
+    console.log("[v0] ✅ Обязательные типы (названия):", requiredTypeNames)
+    console.log("[v0] 📤 Загруженные типы (названия):", uploadedTypeNames)
+    console.log("[v0] 📊 Документы по типам:", documentsByType)
+    console.log("[v0] ✅ Все обязательные загружены:", allRequiredUploaded)
+    console.log("[v0] ☑️ Ответственность принята:", responsibilityAccepted)
 
     return allRequiredUploaded
   }
 
   const handleParticipateClick = () => {
-    console.log("[v0] Пользователь принял ответственность и готов участвовать в аукционе")
+    console.log("[v0] 🎯 Пользователь принял ответственность и готов участвовать в аукционе")
+    console.log("[v0] 📋 Финальная проверка документов:", checkDocumentsComplete())
+    console.log("[v0] ☑️ Ответственность принята:", responsibilityAccepted)
     onDocumentsComplete()
   }
 
@@ -206,9 +294,13 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
 
   useEffect(() => {
     if (isOpen) {
+      console.log("[v0] 🚀 Модальное окно документов открыто для аукциона:", auctionId)
       setLoading(true)
       setResponsibilityAccepted(false)
-      Promise.all([fetchDocumentTypes(), fetchUserDocuments()]).finally(() => setLoading(false))
+      Promise.all([fetchDocumentTypes(), fetchUserDocuments()]).finally(() => {
+        setLoading(false)
+        console.log("[v0] ✅ Загрузка данных модального окна завершена")
+      })
     }
   }, [isOpen])
 
@@ -267,16 +359,16 @@ export function DocumentUploadModal({ isOpen, onClose, onDocumentsComplete, auct
                           </h3>
                           {isDocumentUploaded(docType.id) && (
                             <p className="text-sm text-green-600 font-medium">
-                              Загружено файлов: {documentsByType[docType.id]?.length || 0}
+                              Загружено файлов: {documentsByType[docType.name]?.length || 0}
                             </p>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    {documentsByType[docType.id] && documentsByType[docType.id].length > 0 && (
+                    {documentsByType[docType.name] && documentsByType[docType.name].length > 0 && (
                       <div className="mb-4 space-y-2">
-                        {documentsByType[docType.id].map((doc, index) => (
+                        {documentsByType[docType.name].map((doc, index) => (
                           <div
                             key={doc.id}
                             className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200"

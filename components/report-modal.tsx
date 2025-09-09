@@ -17,6 +17,7 @@ interface ReportData {
     lotPercent: number
     lotTermMonth: number | null
     offerPercent: string
+    lotVolume: number | null
   }>
   dealsTable: Array<{
     bank: string
@@ -25,6 +26,7 @@ interface ReportData {
     lotPercent: number
     lotTermMonth: number | null
     offerPercent: string
+    lotVolume: number | null
   }>
 }
 
@@ -143,6 +145,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
               <th>Коммерческий банк</th>
               <th>Наименование лота</th>
               <th>Регистрационный номер лота</th>
+              <th>Объем лота (сом)</th>
               <th>Срок размещения депозита (месяц)</th>
               <th>Стартовый размер процентной ставки по депозиту (% годовых)</th>
               <th>Ставка ком банка (% годовых)</th>
@@ -156,6 +159,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
                 <td>${offer.bank}</td>
                 <td>${offer.lotAsset}</td>
                 <td>${offer.lotId}</td>
+                <td>${offer.lotVolume || "-"}</td>
                 <td>${offer.lotTermMonth || "-"}</td>
                 <td>${offer.lotPercent}%</td>
                 <td>${offer.offerPercent}%</td>
@@ -173,6 +177,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
               <th>Коммерческий банк</th>
               <th>Наименование лота</th>
               <th>Регистрационный номер лота</th>
+              <th>Объем лота (сом)</th>
               <th>Срок размещения депозита (месяц)</th>
               <th>Стартовый размер процентной ставки по депозиту (% годовых)</th>
               <th>Ставка ком банка (% годовых)</th>
@@ -186,6 +191,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
                 <td>${deal.bank}</td>
                 <td>${deal.lotAsset}</td>
                 <td>${deal.lotId}</td>
+                <td>${deal.lotVolume || "-"}</td>
                 <td>${deal.lotTermMonth || "-"}</td>
                 <td>${deal.lotPercent}%</td>
                 <td>${deal.offerPercent}%</td>
@@ -276,6 +282,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
                     <th className="border border-gray-300 p-2 text-left">Коммерческий банк</th>
                     <th className="border border-gray-300 p-2 text-left">Наименование лота</th>
                     <th className="border border-gray-300 p-2 text-left">Регистрационный номер лота</th>
+                    <th className="border border-gray-300 p-2 text-left">Объем лота (сом)</th>
                     <th className="border border-gray-300 p-2 text-left">Срок размещения депозита (месяц)</th>
                     <th className="border border-gray-300 p-2 text-left">
                       Стартовый размер процентной ставки по депозиту (% годовых)
@@ -289,6 +296,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
                       <td className="border border-gray-300 p-2">{offer.bank}</td>
                       <td className="border border-gray-300 p-2">{offer.lotAsset}</td>
                       <td className="border border-gray-300 p-2">{offer.lotId}</td>
+                      <td className="border border-gray-300 p-2">{offer.lotVolume || "-"}</td>
                       <td className="border border-gray-300 p-2">{offer.lotTermMonth || "-"}</td>
                       <td className="border border-gray-300 p-2">{offer.lotPercent}%</td>
                       <td className="border border-gray-300 p-2">{offer.offerPercent}%</td>
@@ -308,6 +316,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
                     <th className="border border-gray-300 p-2 text-left">Коммерческий банк</th>
                     <th className="border border-gray-300 p-2 text-left">Наименование лота</th>
                     <th className="border border-gray-300 p-2 text-left">Регистрационный номер лота</th>
+                    <th className="border border-gray-300 p-2 text-left">Объем лота (сом)</th>
                     <th className="border border-gray-300 p-2 text-left">Срок размещения депозита (месяц)</th>
                     <th className="border border-gray-300 p-2 text-left">
                       Стартовый размер процентной ставки по депозиту (% годовых)
@@ -321,6 +330,7 @@ export function ReportModal({ isOpen, onClose, reportData, auctionId }: ReportMo
                       <td className="border border-gray-300 p-2">{deal.bank}</td>
                       <td className="border border-gray-300 p-2">{deal.lotAsset}</td>
                       <td className="border border-gray-300 p-2">{deal.lotId}</td>
+                      <td className="border border-gray-300 p-2">{deal.lotVolume || "-"}</td>
                       <td className="border border-gray-300 p-2">{deal.lotTermMonth || "-"}</td>
                       <td className="border border-gray-300 p-2">{deal.lotPercent}%</td>
                       <td className="border border-gray-300 p-2">{deal.offerPercent}%</td>

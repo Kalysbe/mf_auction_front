@@ -13,7 +13,7 @@ import {
   tokenManager,
   API_BASE_URL,
 } from "@/lib/api"
-import { Wifi, WifiOff, FileText } from "lucide-react"
+import { Wifi, WifiOff, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ReportModal } from "@/components/report-modal"
@@ -70,13 +70,30 @@ export default function Home() {
     return () => window.removeEventListener("auth-changed", handleAuthChange)
   }, [])
 
+  useEffect(() => {
+    const checkDocumentsForAllAuctions = async () => {
+      if (!user || auctions.length === 0) return
+
+      console.log("[v0] Проверяем документы для всех активных аукционов")
+
+      for (const auction of auctions) {
+        const normalizedStatus = normalizeAuctionStatus(auction?.status)
+        if (normalizedStatus === "active") {
+          await checkUserDocuments(auction.id)
+        }
+      }
+    }
+
+    checkDocumentsForAllAuctions()
+  }, [auctions, user])
+
   const handleGetReport = async (auctionId: string) => {
     if (!user) return
 
     setLoadingReport(auctionId)
     console.log("[v0] Получение ведомости для аукциона:", auctionId)
     console.log("[v0] ОТЛАДКА URL - API_BASE_URL:", API_BASE_URL)
-    console.log("[v0] ОТЛАДКА URL - Полный URL запроса:", `${API_BASE_URL}/api/auction/${auctionId}`)
+    console.log("[v0] ОТЛАДКА URL - Полный URL запроса:", `${API_BASE_URL}/auction/${auctionId}`)
 
     try {
       const token = tokenManager.getToken()
@@ -86,7 +103,7 @@ export default function Home() {
         return
       }
 
-      const fullUrl = `${API_BASE_URL}/api/auction/${auctionId}`
+      const fullUrl = `${API_BASE_URL}/auction/${auctionId}`
       console.log("[v0] ФИНАЛЬНЫЙ URL ЗАПРОСА:", fullUrl)
 
       const response = await fetch(fullUrl, {
@@ -145,6 +162,7 @@ export default function Home() {
   const checkUserDocuments = async (auctionId: string) => {
     if (!user) return false
 
+    // Пропускаем проверку документов для роли: admin или initiator
     if (user.role === "admin" || user.role === "initiator") {
       console.log("[v0] Пропускаем проверку документов для роли:", user.role)
       return true
@@ -158,13 +176,11 @@ export default function Home() {
       }
 
       console.log("[v0] Проверяем документы пользователя для аукциона:", auctionId)
-      console.log("[v0] ОТЛАДКА URL - API_BASE_URL для документов:", API_BASE_URL)
-      console.log("[v0] ОТЛАДКА URL - URL списка документов:", `${API_BASE_URL}/file/my-list/`)
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-      const docsResponse = await fetch(`${API_BASE_URL}/file/my-list/`, {
+      const docsResponse = await fetch(`${API_BASE_URL}/file/auction/${auctionId}/files/`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -173,49 +189,63 @@ export default function Home() {
       })
 
       clearTimeout(timeoutId)
-      console.log("[v0] Статус ответа списка документов:", docsResponse.status)
+      console.log("[v0] Статус ответа документов аукциона:", docsResponse.status)
 
       if (!docsResponse.ok) {
-        const errorText = await docsResponse.text()
-        console.error("[v0] Ошибка API при получении документов:", {
-          status: docsResponse.status,
-          statusText: docsResponse.statusText,
-          error: errorText,
-        })
-
+        console.error("[v0] Ошибка API при получении документов аукциона:", docsResponse.status)
         return false
       }
 
-      const documents = await docsResponse.json()
-      console.log("[v0] Получены документы пользователя:", JSON.stringify(documents, null, 2))
+      const auctionDocuments = await docsResponse.json()
+      console.log("[v0] Получены документы для аукциона (полная структура):", auctionDocuments)
 
-      // Извлекаем файлы из структуры аукционов
-      const allFiles = documents.flatMap((auction: any) => auction.files || [])
+      const uploadedDocumentTypes = new Set<string>()
 
-      // Фильтруем файлы для текущего аукциона
-      const auctionFiles = allFiles.filter((file: any) => file.auction_id === auctionId)
+      if (Array.isArray(auctionDocuments) && auctionDocuments.length > 0) {
+        // Находим аукцион с нужным ID
+        const auctionData = auctionDocuments.find((auction) => auction.id === auctionId)
 
-      const hasDocuments = auctionFiles.length > 0
-
-      console.log("[v0] Проверка документов для аукциона:", auctionId)
-      console.log("[v0] Файлы для аукциона:", auctionFiles.length)
-      console.log("[v0] Документы загружены:", hasDocuments)
-
-      setDocumentsComplete((prev) => ({ ...prev, [auctionId]: hasDocuments }))
-      return hasDocuments
-    } catch (error) {
-      console.error("[v0] Исключение при проверке документов:", error)
-
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
-          console.error("[v0] Таймаут при получении документов")
-        } else if (error.message.includes("Failed to fetch")) {
-          console.error("[v0] Сетевая ошибка при получении документов")
-        } else {
-          console.error("[v0] Неизвестная ошибка при получении документов:", error.message)
+        if (auctionData && auctionData.files && Array.isArray(auctionData.files)) {
+          // Извлекаем все типы документов из групп
+          auctionData.files.forEach((group: any) => {
+            if (group.file_type && group.files && Array.isArray(group.files) && group.files.length > 0) {
+              uploadedDocumentTypes.add(group.file_type)
+            }
+          })
         }
       }
 
+      console.log("[v0] Загруженные типы документов:", Array.from(uploadedDocumentTypes))
+
+      const typesResponse = await fetch(`${API_BASE_URL}/file/type/list`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+      })
+
+      let requiredDocumentTypes = []
+      if (typesResponse.ok) {
+        const types = await typesResponse.json()
+        // Используем названия типов документов, а не ID
+        requiredDocumentTypes = types.map((type: any) => type.title || type.name)
+        console.log("[v0] Обязательные типы документов:", requiredDocumentTypes)
+      } else {
+        console.log("[v0] Не удалось получить типы документов, используем fallback")
+        return false
+      }
+
+      const hasAllRequiredDocuments = requiredDocumentTypes.every((type: string) => uploadedDocumentTypes.has(type))
+
+      console.log("[v0] Все обязательные документы загружены:", hasAllRequiredDocuments)
+      console.log("[v0] Требуется:", requiredDocumentTypes)
+      console.log("[v0] Загружено:", Array.from(uploadedDocumentTypes))
+
+      setDocumentsComplete((prev) => ({ ...prev, [auctionId]: hasAllRequiredDocuments }))
+      return hasAllRequiredDocuments
+    } catch (error) {
+      console.error("[v0] Исключение при проверке документов:", error)
       return false
     }
   }
@@ -225,15 +255,16 @@ export default function Home() {
 
     const hasDocuments = await checkUserDocuments(auctionId)
 
-    if (hasDocuments) {
-      console.log("[v0] Документы загружены, присоединяемся к аукциону")
-      joinAuction(auctionId)
-      router.push(`/auction/${auctionId}`)
-    } else {
-      console.log("[v0] Документы не загружены, показываем модальное окно")
+    if (!hasDocuments && user?.role !== "admin" && user?.role !== "initiator") {
+      console.log("[v0] Документы не загружены, блокируем участие")
       setSelectedAuctionId(auctionId)
       setDocumentModalOpen(true)
+      return
     }
+
+    console.log("[v0] Документы проверены, присоединяемся к аукциону")
+    joinAuction(auctionId)
+    router.push(`/auction/${auctionId}`)
   }
 
   const handleDocumentsComplete = () => {
@@ -243,6 +274,45 @@ export default function Home() {
     if (selectedAuctionId) {
       joinAuction(selectedAuctionId)
       router.push(`/auction/${selectedAuctionId}`)
+    }
+  }
+
+  const getDocumentStatusIcon = (auctionId: string) => {
+    if (!user) return null
+
+    // Админы и инициаторы не нуждаются в документах
+    if (user.role === "admin" || user.role === "initiator") {
+      return (
+        <div className="flex items-center gap-1 text-blue-600">
+          <CheckCircle className="h-4 w-4" />
+          <span className="text-xs">Админ</span>
+        </div>
+      )
+    }
+
+    const hasDocuments = documentsComplete[auctionId]
+
+    if (hasDocuments === true) {
+      return (
+        <div className="flex items-center gap-1 text-green-600">
+          <CheckCircle className="h-4 w-4" />
+          <span className="text-xs">Готов</span>
+        </div>
+      )
+    } else if (hasDocuments === false) {
+      return (
+        <div className="flex items-center gap-1 text-red-600">
+          <XCircle className="h-4 w-4" />
+          <span className="text-xs">Нет документов</span>
+        </div>
+      )
+    } else {
+      return (
+        <div className="flex items-center gap-1 text-yellow-600">
+          <AlertCircle className="h-4 w-4" />
+          <span className="text-xs">Проверка...</span>
+        </div>
+      )
     }
   }
 
@@ -304,6 +374,7 @@ export default function Home() {
                 <TableHead>Время окончания</TableHead>
                 <TableHead>Тип закрытия</TableHead>
                 <TableHead>Статус</TableHead>
+                <TableHead className="text-center">Документы</TableHead>
                 <TableHead className="text-right">Действия</TableHead>
               </TableRow>
             </TableHeader>
@@ -334,6 +405,13 @@ export default function Home() {
                       </Badge>
                       {process.env.NODE_ENV === "development" && (
                         <div className="text-xs text-gray-400 mt-1">Raw: {auction?.status || "undefined"}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {normalizedStatus === "active" ? (
+                        getDocumentStatusIcon(auction.id)
+                      ) : (
+                        <span className="text-xs text-gray-400">Не требуется</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -388,7 +466,7 @@ export default function Home() {
               })}
               {auctions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     {user
                       ? isConnected
                         ? "Нет активных аукционов"
